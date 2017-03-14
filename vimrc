@@ -17,6 +17,7 @@ Plug 'airblade/vim-gitgutter'
 Plug 'kannokanno/previm'
 Plug 'puppetlabs/puppet-syntax-vim'
 Plug 'vim-ruby/vim-ruby'
+Plug 'hashivim/vim-terraform'
 
 call plug#end()
 
@@ -39,6 +40,9 @@ let g:syntastic_auto_loc_list = 1
 let g:syntastic_check_on_open = 1
 let g:syntastic_check_on_wq = 0
 
+let g:airline#extensions#tabline#enabled = 1
+
+let g:airline_theme='dark'
 autocmd FileType gitcommit setlocal foldmethod=syntax
 
 set nocompatible
