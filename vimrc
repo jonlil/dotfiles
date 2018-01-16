@@ -15,7 +15,7 @@ Plug 'tpope/vim-fugitive'
 Plug 'mattn/emmet-vim'
 Plug 'airblade/vim-gitgutter'
 Plug 'kannokanno/previm'
-Plug 'puppetlabs/puppet-syntax-vim'
+Plug 'rodjek/vim-puppet'
 Plug 'vim-ruby/vim-ruby'
 Plug 'hashivim/vim-terraform'
 
