@@ -44,6 +44,11 @@ let g:airline#extensions#tabline#enabled = 1
 let g:airline_theme='dark'
 autocmd FileType gitcommit setlocal foldmethod=syntax
 
+au BufRead,BufNewFile *.nginx set ft=nginx
+au BufRead,BufNewFile */etc/nginx/* set ft=nginx
+au BufRead,BufNewFile */usr/local/nginx/conf/* set ft=nginx
+au BufRead,BufNewFile nginx.conf set ft=nginx
+
 set nocompatible
 set noswapfile
 set nobackup
@@ -60,3 +65,7 @@ set nospell
 set exrc
 set secure
 set number
+set list
+set listchars=eol:$,tab:>-,trail:~,extends:>,precedes:<
+
+cabbrev w!! w !sudo tee % >/dev/null
