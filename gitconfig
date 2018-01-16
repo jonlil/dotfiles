@@ -1,0 +1,15 @@
+[core]
+    excludesfile = ~/.gitignore
+    editor = /usr/bin/vim
+
+[user]
+    signingkey = BAEFCAB6
+    email = jonas.liljestrand@hemnet.se
+    name = Jonas Liljestrand
+
+[commit]
+    gpgsign = true
+
+[alias]
+    csi = commit -S -v
+    diffc = diff --cached
