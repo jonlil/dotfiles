@@ -3,6 +3,8 @@ call plug#begin('~/.vim/plugged')
 Plug 'scrooloose/nerdtree'
 Plug 'vim-syntastic/syntastic'
 Plug 'dikiaap/minimalist'
+Plug 'lifepillar/vim-solarized8'
+Plug 'kristijanhusak/vim-hybrid-material'
 Plug 'vim-airline/vim-airline'
 Plug 'vim-airline/vim-airline-themes'
 Plug 'editorconfig/editorconfig-vim'
@@ -31,7 +33,8 @@ filetype plugin indent on
 syntax on
 
 set t_Co=256
-colorscheme minimalist
+set background=dark
+colorscheme hybrid_material
 
 highlight diffRemoved ctermfg=red
 highlight diffAdded ctermfg=green
@@ -40,6 +43,7 @@ set statusline+=%#warningmsg#
 set statusline+=%{SyntasticStatuslineFlag()}
 set statusline+=%*
 
+let NERDTreeShowHidden=1
 let g:syntastic_mode_map = { 'mode': 'passive', 'active_filetypes': [],'passive_filetypes': ['puppet'] }
 let g:syntastic_always_populate_loc_list = 1
 let g:syntastic_auto_loc_list = 1
