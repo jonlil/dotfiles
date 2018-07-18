@@ -26,6 +26,7 @@ Plug 'sheerun/vim-polyglot'
 Plug 'SirVer/ultisnips'
 Plug 'honza/vim-snippets'
 Plug 'rust-lang/rust.vim'
+Plug 'vim-scripts/groovy.vim'
 
 call plug#end()
 
