@@ -13,3 +13,6 @@
 [alias]
     csi = commit -S -v
     diffc = diff --cached
+
+[push]
+    default = current
