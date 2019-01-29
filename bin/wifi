@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+connect() {
+  nmcli c up "${1}"
+}
+
+if [[ $1 == "hemma" ]]; then
+  connect "Kodgrottan5G"
+else
+  connect "AndroidAP"
+fi
