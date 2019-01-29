@@ -22,11 +22,13 @@ Plug 'hashivim/vim-terraform'
 Plug 'Valloric/YouCompleteMe'
 
 Plug 'majutsushi/tagbar'
-Plug 'sheerun/vim-polyglot'
 Plug 'SirVer/ultisnips'
 Plug 'honza/vim-snippets'
 Plug 'rust-lang/rust.vim'
 Plug 'vim-scripts/groovy.vim'
+Plug 'asciidoc/vim-asciidoc'
+Plug 'ngmy/vim-rubocop'
+Plug 'nvie/vim-flake8'
 
 call plug#end()
 
@@ -39,6 +41,8 @@ colorscheme hybrid_material
 
 highlight diffRemoved ctermfg=red
 highlight diffAdded ctermfg=green
+highlight clear SpellBad
+highlight SpellBad cterm=underline
 
 set statusline+=%#warningmsg#
 set statusline+=%{SyntasticStatuslineFlag()}
@@ -68,14 +72,14 @@ let g:ycm_complete_in_strings = 1 " Completion in string
 let g:ycm_key_list_select_completion = ['<C-j>', '<Down>']
 let g:ycm_key_list_previous_completion = ['<C-k>', '<Up>']
 
+" Goto definition with F3
+map <F3> :YcmCompleter GoTo<CR>
+
 " ---------------------------------- "
 "  Rust
 " ---------------------------------- "
 let g:rustfmt_autosave = 1
 let g:racer_cmd="/Users/jonas/.cargo/bin/racer"
-
-" Goto definition with F3
-map <F3> :YcmCompleter GoTo<CR>
 
 let g:airline#extensions#tabline#enabled = 1
 
@@ -87,20 +91,39 @@ au BufRead,BufNewFile *.nginx set ft=nginx
 au BufRead,BufNewFile */etc/nginx/* set ft=nginx
 au BufRead,BufNewFile */usr/local/nginx/conf/* set ft=nginx
 au BufRead,BufNewFile nginx.conf set ft=nginx
+au BufRead,BufNewFile Jenkinsfile set ft=groovy
+
+au FileType sh setl sts=2 et
+au FileType ruby setl ts=2 sts=2 sw=2 et
+au FileType terraform setl ts=2 sts=2 sw=2 et
+au FileType yaml setl ts=2 sts=2 sw=2 et
+
+set tabstop=4       " The width of a TAB is set to 4.
+                    " Still it is a \t. It is just that
+                    " Vim will interpret it to be having
+                    " a width of 4.
+
+set shiftwidth=4    " Indents will have a width of 4
+
+set softtabstop=4   " Sets the number of columns for a TAB
+
+set expandtab       " Expand TABs to spaces
 
 set nocompatible
 set noswapfile
 set nobackup
 set ttyfast
 set tabstop=4
-set softtabstop=4
-set shiftwidth=4
-set expandtab
 set fileformat=unix  " Unix file format.
 set wildmode=longest,list,full  " Bash like command autocomplete
 set wildmenu  " Show matches above commandline when pressing TAB.
 set more
-set nospell
+
+" ---------------------------------- "
+" Spelling
+" ---------------------------------- "
+set spell spelllang=en_us,sv
+
 set exrc
 set secure
 set number
