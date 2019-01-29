@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+if [[ $1 == hemma ]]; then
+  SSH_PROFILE="hemma"
+else
+  SSH_PROFILE="nas"
+fi
+
+ssh -fNv -L 3049:192.168.11.2:2049 "${SSH_PROFILE}"
+
+mount -t nfs -o port=3049 localhost:/Musik /Volumes/muzika
