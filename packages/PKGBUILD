@@ -23,6 +23,9 @@ package_jonlil-base() {
     'wget'
     'zip'
     'zsh'
+    'gnome-keyring'
+    'libsecret'
+    'gnupg'
   )
 }
 
@@ -37,5 +40,6 @@ package_jonlil-workstation() {
     'xorg-utils'
     'xorg-xinit'
     'xorg-xrandr'
+    'gnome-alsamixer'
   )
 }
