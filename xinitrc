@@ -5,8 +5,6 @@
 
 userresources="$HOME/.Xresources"
 
-echo "running" > /home/jonas/xinit.log
-
 if [[ -f $userresources ]]; then
   xrdb merge "$userresources"
 fi

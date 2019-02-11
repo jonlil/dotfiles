@@ -7,6 +7,16 @@ symlink() {
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
 
 symlink "dotfiles/zshrc" ".zshrc"
+symlink "dotfiles/vimrc" ".vimrc"
+
+# TODOs
+# Install software:
+# - nvm
+# - jack2
+# - cmus
+# - steam
+# - discord
+# - libc++
 
 # Setup rust
 if ! hash cargo; then
