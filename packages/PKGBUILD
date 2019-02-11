@@ -41,5 +41,6 @@ package_jonlil-workstation() {
     'xorg-xinit'
     'xorg-xrandr'
     'gnome-alsamixer'
+    'ttf-libernation'
   )
 }
