@@ -29,9 +29,14 @@ ensure-folder "${HOME}/.ssh"
 ensure-permissions "0600" "${HOME}/.ssh"
 symlink "dotfiles/ssh/config" ".ssh/config"
 
+# Install nvm
+curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.34.0/install.sh | bash
+
+nvm install 8
+nvm install 10
+
 # TODOs
 # Install software:
-# - nvm
 # - jack2
 # - cmus
 # - steam
