@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 
-# TODO: Add oh-my-zsh setup
+symlink() {
+  ln -sf "${HOME}/${1}" "${HOME}/${2}"
+}
+
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
+
+symlink "dotfiles/zshrc" ".zshrc"
 
 # Setup rust
 if ! hash cargo; then
