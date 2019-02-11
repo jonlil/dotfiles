@@ -16,6 +16,8 @@ symlink() {
   ln -sf "${HOME}/${1}" "${HOME}/${2}"
 }
 
+timedatectl set-ntp true
+
 # Install oh-my-zsh
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
 symlink "dotfiles/zshrc" ".zshrc"
