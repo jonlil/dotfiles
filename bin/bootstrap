@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+echo-runner() {
+  echo "$@"
+  if ! command_capture=$("$@" 2>&1); then
+    >&2 echo "${command_capture}"
+    exit 1
+  fi
+}
+
+echo-runner pip install --user pgcli
