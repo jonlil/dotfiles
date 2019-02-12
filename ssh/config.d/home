@@ -14,7 +14,7 @@ Host rasp03
     User pi
     HostName 192.168.11.4
 
-Host raps04
+Host rasp04
     User pi
     HostName 192.168.2.4
 

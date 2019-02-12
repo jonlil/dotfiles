@@ -1,7 +1,6 @@
 Include config.d/*
 
 Host *
-    UseKeychain yes
     ServerAliveInterval 30
     SendEnv LANG LC_*
     IdentityFile ~/.ssh/id_rsa
