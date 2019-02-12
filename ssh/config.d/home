@@ -1,0 +1,27 @@
+Host nas
+    User root
+    HostName 192.168.10.35
+
+Host rasp01
+    User pi
+    HostName 192.168.11.6
+
+Host rasp02
+    User pi
+    HostName 192.168.11.5
+
+Host rasp03
+    User pi
+    HostName 192.168.11.4
+
+Host raps04
+    User pi
+    HostName 192.168.2.4
+
+Host kodi
+    User osmc
+    HostName 192.168.11.10
+
+Host internetrasp01
+    User pi
+    HostName 213.100.192.201
