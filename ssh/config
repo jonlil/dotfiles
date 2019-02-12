@@ -5,4 +5,3 @@ Host *
     ServerAliveInterval 30
     SendEnv LANG LC_*
     IdentityFile ~/.ssh/id_rsa
-

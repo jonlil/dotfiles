@@ -1,0 +1,46 @@
+pkgbase='jonlil'
+pkgname=('jonlil-base')
+pkgver=0.0.1
+pkgrel=1
+arch=('any')
+url="https://github.com/jonlil/dotfiles"
+license=("MIT")
+groups=("jonlil")
+
+package_jonlil-base() {
+  depends=(
+    'docker'
+    'efibootmgr'
+    'git'
+    'go'
+    'grub'
+    'htop'
+    'jq'
+    'openssh'
+    'rsync'
+    'unrar'
+    'unzip'
+    'wget'
+    'zip'
+    'zsh'
+    'gnome-keyring'
+    'libsecret'
+    'gnupg'
+  )
+}
+
+package_jonlil-workstation() {
+  depends=(
+    'dmenu'
+    'google-chrome'
+    'i3status'
+    'kitty'
+    'terminus-font'
+    'xorg-server'
+    'xorg-utils'
+    'xorg-xinit'
+    'xorg-xrandr'
+    'gnome-alsamixer'
+    'ttf-libernation'
+  )
+}

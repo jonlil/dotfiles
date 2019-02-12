@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+local_port="1445"
+remote_host="192.168.11.2"
+# Samba default tcp port
+remote_port="445"
+
+mount_point="/Volumes/muzika"
+remote_folder="Musik"
+
+if [[ $1 != hemma ]]; then
+  SSH_PROFILE="hem"
+else
+  SSH_PROFILE="nas"
+fi
+
+debug_logger() {
+  >&2 echo "[DEBUG]" "$@"
+}
+
+grep_without_self() {
+  grep -v "grep" | grep "$@"
+}
+
+tunnel_alive() {
+  nc -z -w 5 127.0.0.1 "${local_port}"
+}
+
+open_ssh_tunnel() {
+  debug_logger "Opening ssh tunnel with profile ${1}"
+  ssh -fN -L "${local_port}:${remote_host}:${remote_port}" "${1}"
+}
+
+if ps aux | grep_without_self -q "ssh.*${local_port}:${remote_host}:${remote_port}"; then
+  if ! tunnel_alive; then
+    debug_logger "Tunnel is not alive, re-establishing"
+    open_ssh_tunnel "${SSH_PROFILE}"
+  else
+    debug_logger "Tunnel is already alive, and port communication works"
+  fi
+else
+  debug_logger "Tunnel is not open"
+  open_ssh_tunnel "${SSH_PROFILE}"
+fi
+
+sudo mount \
+  -t cifs \
+  -o port="${local_port}",vers=3,username=guest,password= \
+  "//127.0.0.1/${remote_folder}" \
+  "${mount_point}"
