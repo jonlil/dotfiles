@@ -32,15 +32,16 @@ package_jonlil-base() {
 package_jonlil-workstation() {
   depends=(
     'dmenu'
+    'gnome-alsamixer'
     'google-chrome'
+    'i3lock'
     'i3status'
     'kitty'
     'terminus-font'
+    'ttf-libernation'
     'xorg-server'
     'xorg-utils'
     'xorg-xinit'
     'xorg-xrandr'
-    'gnome-alsamixer'
-    'ttf-libernation'
   )
 }
