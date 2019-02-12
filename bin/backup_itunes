@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+source_directory="/Volumes/muzika/iTunes"
+target_directory="nas:/data/Musik"
+
+if [[ ! -d ${source_directory} ]]; then
+    echo "Muzika directory is not mounted">&2
+    exit 1
+fi
+
+rsync -rvz --checksum --progress "${source_directory}" "${target_directory}"
