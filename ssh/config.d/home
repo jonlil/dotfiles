@@ -21,7 +21,3 @@ Host rasp04
 Host kodi
     User osmc
     HostName 192.168.11.10
-
-Host internetrasp01
-    User pi
-    HostName 213.100.192.201
