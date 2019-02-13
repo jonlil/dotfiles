@@ -33,6 +33,7 @@ package_jonlil-workstation() {
   depends=(
     'dmenu'
     'gnome-alsamixer'
+    'gnome-screenshot'
     'google-chrome'
     'i3lock'
     'i3status'
