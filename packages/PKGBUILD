@@ -43,6 +43,7 @@ package_jonlil-workstation() {
     'pulseaudio-jack'
     'pulsemixer'
     'terminus-font'
+    'the_silver_searcher'
     'ttf-libernation'
     'typescript'
     'wireshark-qt'
