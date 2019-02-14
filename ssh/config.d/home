@@ -1,5 +1,5 @@
 Host nas
-    User root
+    User jonas
     HostName 192.168.10.35
 
 Host rasp01
@@ -29,5 +29,5 @@ Host git.jl-media.se
 
 Host admin.jl-media.se
     ProxyJump pi@hem
-    User root
+    User jonas
     HostName 192.168.11.2
