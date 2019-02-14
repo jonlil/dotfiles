@@ -1,0 +1,4 @@
+Host git.skifinder.se git.jl-media.se
+    ProxyJump pi@hem
+    User git
+    HostName 192.168.11.2
