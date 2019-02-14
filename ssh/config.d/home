@@ -21,3 +21,13 @@ Host rasp04
 Host kodi
     User osmc
     HostName 192.168.11.10
+
+Host git.jl-media.se
+    ProxyJump pi@hem
+    User git
+    HostName 192.168.11.2
+
+Host admin.jl-media.se
+    ProxyJump pi@hem
+    User root
+    HostName 192.168.11.2
