@@ -16,6 +16,12 @@ symlink() {
   ln -sf "${HOME}/${1}" "${HOME}/${2}"
 }
 
+add-to-path() {
+  if ! cat ~/.zsh_profile | grep -q "${1}"; then
+    echo "export PATH=\"${1}:\${PATH}\"" >> ~/.zsh_profile
+  fi
+}
+
 timedatectl set-ntp true
 
 # Install oh-my-zsh
@@ -45,10 +51,9 @@ nvm install 10
 
 # Setup rust
 if ! hash cargo; then
-  curl -sSf https://static.rust-lang.org/rustup.sh | sh
-  if ! cat ~/.zsh_profile | grep -q ".cargo/bin"; then
-    echo "export PATH=\"${HOME}/.cargo/bin\:${PATH}\"" > ~/.zsh_profile
-  fi
+  curl https://sh.rustup.rs -sSf | sh
+  add-to-path "${HOME}/.cargo/bin"
 fi
 
+# Setup go
 cargo install watchexec &2>/dev/null
