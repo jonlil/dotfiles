@@ -25,7 +25,7 @@ Plug 'kannokanno/previm'
 Plug 'rodjek/vim-puppet'
 Plug 'vim-ruby/vim-ruby'
 Plug 'hashivim/vim-terraform'
-Plug 'Valloric/YouCompleteMe'
+Plug 'neoclide/coc.nvim', {'tag': '*', 'do': { -> coc#util#install()}}
 
 Plug 'majutsushi/tagbar'
 Plug 'SirVer/ultisnips'
@@ -35,6 +35,10 @@ Plug 'vim-scripts/groovy.vim'
 Plug 'asciidoc/vim-asciidoc'
 Plug 'ngmy/vim-rubocop'
 Plug 'nvie/vim-flake8'
+Plug 'iamcco/markdown-preview.nvim', { 'do': 'cd app & yarn install'  }
+Plug 'w0rp/ale'
+Plug 'wfleming/vim-codeclimate'
+Plug 'alampros/vim-styled-jsx'
 
 call plug#end()
 
@@ -64,22 +68,6 @@ let g:syntastic_check_on_wq = 0
 let g:UltiSnipsExpandTrigger="<tab>"
 let g:UltiSnipsJumpForwardTrigger="<c-b>"
 let g:UltiSnipsJumpBackwardTrigger="<c-z>"
-
-" ---------------------------------- "
-" Configure YouCompleteMe
-" ---------------------------------- "
-
-let g:ycm_collect_identifiers_from_tags_files = 1 " Let YCM read tags from Ctags file
-let g:ycm_use_ultisnips_completer = 1 " Default 1, just ensure
-let g:ycm_seed_identifiers_with_syntax = 1 " Completion for programming language's keyword
-let g:ycm_complete_in_comments = 1 " Completion in comments
-let g:ycm_complete_in_strings = 1 " Completion in string
-
-let g:ycm_key_list_select_completion = ['<C-j>', '<Down>']
-let g:ycm_key_list_previous_completion = ['<C-k>', '<Up>']
-
-" Goto definition with F3
-map <F3> :YcmCompleter GoTo<CR>
 
 " ---------------------------------- "
 "  Rust
@@ -141,3 +129,19 @@ set backspace=indent,eol,start
 cabbrev w!! w !sudo tee % >/dev/null
 
 nmap <F8> :TagbarToggle<CR>
+nmap <Leader>ao :CodeClimateAnalyzeOpenFiles<CR>
+
+vmap <C-c> :y *<CR>
+
+let g:clipboard = {
+  \   'name': 'xclip-xfce4-clipman',
+  \   'copy': {
+  \      '+': 'xclip -selection clipboard',
+  \      '*': 'xclip -selection clipboard',
+  \    },
+  \   'paste': {
+  \      '+': 'xclip -selection clipboard -o',
+  \      '*': 'xclip -selection clipboard -o',
+  \   },
+  \   'cache_enabled': 1,
+  \ }
