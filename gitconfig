@@ -16,5 +16,3 @@
 
 [push]
     default = current
-[rebase]
-    autosquash = true

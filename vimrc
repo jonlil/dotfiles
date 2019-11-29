@@ -6,29 +6,30 @@ endif
 
 call plug#begin('~/.vim/plugged')
 
-Plug 'scrooloose/nerdtree'
-Plug 'vim-syntastic/syntastic'
+Plug 'airblade/vim-gitgutter'
+Plug 'digitaltoad/vim-pug'
 Plug 'dikiaap/minimalist'
-Plug 'lifepillar/vim-solarized8'
+Plug 'editorconfig/editorconfig-vim'
+Plug 'hashivim/vim-terraform'
+Plug 'junegunn/fzf'
+Plug 'junegunn/fzf.vim'
+Plug 'kannokanno/previm'
 Plug 'kristijanhusak/vim-hybrid-material'
+Plug 'leafgarland/typescript-vim'
+Plug 'lifepillar/vim-solarized8'
+Plug 'marijnh/tern_for_vim'
+Plug 'mattn/emmet-vim'
+Plug 'rodjek/vim-puppet'
+Plug 'scrooloose/nerdtree'
+Plug 'tpope/vim-fugitive'
+Plug 'tpope/vim-unimpaired'
 Plug 'vim-airline/vim-airline'
 Plug 'vim-airline/vim-airline-themes'
-Plug 'editorconfig/editorconfig-vim'
-Plug 'digitaltoad/vim-pug'
-Plug 'marijnh/tern_for_vim'
-Plug 'leafgarland/typescript-vim'
-Plug 'junegunn/fzf'
-Plug 'tpope/vim-fugitive'
-Plug 'mattn/emmet-vim'
-Plug 'airblade/vim-gitgutter'
-Plug 'kannokanno/previm'
-Plug 'rodjek/vim-puppet'
 Plug 'vim-ruby/vim-ruby'
-Plug 'hashivim/vim-terraform'
+Plug 'vim-syntastic/syntastic'
 Plug 'neoclide/coc.nvim', {'tag': '*', 'do': { -> coc#util#install()}}
 
 Plug 'majutsushi/tagbar'
-Plug 'SirVer/ultisnips'
 Plug 'honza/vim-snippets'
 Plug 'rust-lang/rust.vim'
 Plug 'vim-scripts/groovy.vim'
@@ -113,6 +114,7 @@ set fileformat=unix  " Unix file format.
 set wildmode=longest,list,full  " Bash like command autocomplete
 set wildmenu  " Show matches above commandline when pressing TAB.
 set more
+set clipboard+=unnamedplus
 
 " ---------------------------------- "
 " Spelling
