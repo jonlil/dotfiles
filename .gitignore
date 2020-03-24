@@ -2,3 +2,7 @@
 vim/bundle/
 .idea
 tags
+bin/ctags
+graphql-language-server
+.vimrc
+.nvimrc

@@ -1,0 +1,20 @@
+general {
+    output_format = "i3bar"
+    separator = "  "
+    colors = true
+}
+
+order += "tztime local"
+order += "load"
+order += "disk /"
+
+load {
+    format = "[ load: %1min, %5min, %15min ]"
+}
+disk "/" {
+    format = "%avail"
+}
+
+tztime local {
+    format = "%d/%m %H:%M:%S"
+}
