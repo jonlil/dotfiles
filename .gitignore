@@ -4,3 +4,5 @@ vim/bundle/
 tags
 bin/ctags
 graphql-language-server
+.vimrc
+.nvimrc

@@ -16,6 +16,7 @@ Plug 'junegunn/fzf.vim'
 Plug 'kannokanno/previm'
 Plug 'kristijanhusak/vim-hybrid-material'
 Plug 'leafgarland/typescript-vim'
+Plug 'peitalin/vim-jsx-typescript'
 Plug 'lifepillar/vim-solarized8'
 Plug 'marijnh/tern_for_vim'
 Plug 'mattn/emmet-vim'
@@ -132,6 +133,7 @@ cabbrev w!! w !sudo tee % >/dev/null
 
 nmap <F8> :TagbarToggle<CR>
 nmap <Leader>ao :CodeClimateAnalyzeOpenFiles<CR>
+nmap <leader>rn <Plug>(coc-rename)
 
 vmap <C-c> :y *<CR>
 
