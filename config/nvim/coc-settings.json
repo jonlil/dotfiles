@@ -5,6 +5,15 @@
       "args": ["start"],
       "filetypes": ["sh"],
       "ignoredRootPaths": ["~"]
+    },
+    "terraform": {
+      "command": "terraform-lsp",
+      "filetypes": ["terraform", "tf"],
+      "initializationOptions": {}
     }
+  },
+  "yaml.schemaStore.enable": true,
+  "yaml.schemas": {
+    "kubernetes": ".kubernetes/**/*.yaml"
   }
 }
