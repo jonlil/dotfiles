@@ -131,8 +131,23 @@ set backspace=indent,eol,start
 
 cabbrev w!! w !sudo tee % >/dev/null
 
-nmap <F8> :TagbarToggle<CR>
+
 nmap <Leader>ao :CodeClimateAnalyzeOpenFiles<CR>
+
+nmap <silent> gd <Plug>(coc-definition)
+
+" Use K to show documentation in preview window.
+nnoremap <silent> K :call <SID>show_documentation()<CR>
+
+function! s:show_documentation()
+  if (index(['vim','help'], &filetype) >= 0)
+    execute 'h '.expand('<cword>')
+  else
+    call CocAction('doHover')
+  endif
+endfunction
+
+nmap <F8> :TagbarToggle<CR>
 nmap <leader>rn <Plug>(coc-rename)
 
 vmap <C-c> :y *<CR>
