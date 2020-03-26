@@ -124,6 +124,7 @@ bindsym $mod+Shift+0 move container to workspace 10
 assign [class="slack"] 0
 assign [class="vlc"] 9
 assign [class="spotify"] 9
+assign [title="X32 EDIT"] 8
 
 # reload the configuration file
 bindsym $mod+Shift+c reload
