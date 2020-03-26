@@ -12,6 +12,7 @@
       "initializationOptions": {}
     }
   },
+  "yaml.format.enable": false,
   "yaml.schemaStore.enable": true,
   "yaml.schemas": {
     "kubernetes": ".kubernetes/**/*.yaml"
