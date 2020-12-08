@@ -11,16 +11,15 @@ Plug 'digitaltoad/vim-pug'
 Plug 'dikiaap/minimalist'
 Plug 'editorconfig/editorconfig-vim'
 Plug 'hashivim/vim-terraform'
-Plug 'junegunn/fzf'
-Plug 'junegunn/fzf.vim'
 Plug 'kannokanno/previm'
+Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
+Plug 'junegunn/fzf.vim'
 Plug 'kristijanhusak/vim-hybrid-material'
 Plug 'leafgarland/typescript-vim'
 Plug 'peitalin/vim-jsx-typescript'
 Plug 'lifepillar/vim-solarized8'
 Plug 'marijnh/tern_for_vim'
 Plug 'mattn/emmet-vim'
-Plug 'rodjek/vim-puppet'
 Plug 'scrooloose/nerdtree'
 Plug 'tpope/vim-fugitive'
 Plug 'tpope/vim-unimpaired'
@@ -28,7 +27,8 @@ Plug 'vim-airline/vim-airline'
 Plug 'vim-airline/vim-airline-themes'
 Plug 'vim-ruby/vim-ruby'
 Plug 'vim-syntastic/syntastic'
-Plug 'neoclide/coc.nvim', {'tag': '*', 'do': { -> coc#util#install()}}
+Plug 'neoclide/coc.nvim', {'branch': 'release'}
+Plug 'rking/ag.vim'
 
 Plug 'majutsushi/tagbar'
 Plug 'honza/vim-snippets'
@@ -38,7 +38,7 @@ Plug 'asciidoc/vim-asciidoc'
 Plug 'ngmy/vim-rubocop'
 Plug 'nvie/vim-flake8'
 Plug 'iamcco/markdown-preview.nvim', { 'do': 'cd app & yarn install'  }
-Plug 'w0rp/ale'
+Plug 'dense-analysis/ale'
 Plug 'wfleming/vim-codeclimate'
 Plug 'alampros/vim-styled-jsx'
 
@@ -152,6 +152,8 @@ nmap <leader>rn <Plug>(coc-rename)
 
 vmap <C-c> :y *<CR>
 
+
+
 let g:clipboard = {
   \   'name': 'xclip-xfce4-clipman',
   \   'copy': {
@@ -164,3 +166,20 @@ let g:clipboard = {
   \   },
   \   'cache_enabled': 1,
   \ }
+
+let g:ale_fixers = {
+  \  '*': ['remove_trailing_lines', 'trim_whitespace'],
+  \  'ruby': [
+  \    'rubocop',
+  \    'standardrb',
+  \   ],
+  \   'javascript': [
+  \     'prettier',
+  \     'eslint',
+  \   ],
+  \   'python': [
+  \     'black',
+  \     'isort',
+  \   ],
+  \
+  \}

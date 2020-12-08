@@ -3,7 +3,7 @@
     editor = /usr/bin/vim
 
 [user]
-    signingkey = BAEFCAB6
+    signingkey = 94172F95
     email = jonas.liljestrand@gmail.com
     name = Jonas Liljestrand
 

@@ -16,5 +16,6 @@
   "yaml.schemaStore.enable": true,
   "yaml.schemas": {
     "kubernetes": ".kubernetes/**/*.yaml"
-  }
+  },
+  "coc.preferences.formatOnSaveFiletypes": ["js"]
 }
