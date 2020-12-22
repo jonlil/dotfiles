@@ -15,8 +15,6 @@ Plug 'kannokanno/previm'
 Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
 Plug 'junegunn/fzf.vim'
 Plug 'kristijanhusak/vim-hybrid-material'
-Plug 'leafgarland/typescript-vim'
-Plug 'peitalin/vim-jsx-typescript'
 Plug 'lifepillar/vim-solarized8'
 Plug 'marijnh/tern_for_vim'
 Plug 'mattn/emmet-vim'
@@ -27,7 +25,7 @@ Plug 'vim-airline/vim-airline'
 Plug 'vim-airline/vim-airline-themes'
 Plug 'vim-ruby/vim-ruby'
 Plug 'vim-syntastic/syntastic'
-Plug 'neoclide/coc.nvim', {'branch': 'release'}
+Plug 'neoclide/coc.nvim'
 Plug 'rking/ag.vim'
 
 Plug 'majutsushi/tagbar'

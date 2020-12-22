@@ -9,6 +9,7 @@ ZSH_THEME="robbyrussell"
 # Add wisely, as too many plugins slow down shell startup.
 plugins=(
   git
+  zsh-completions
 )
 
 source $ZSH/oh-my-zsh.sh
@@ -18,10 +19,18 @@ if [ -d "${HOME}/.local/zsh" ] && [ -s "${HOME}/.local/zsh/profile" ]; then
   source ~/.local/zsh/profile
 fi
 
+shared_zsh_profile="${HOME}/.config/zsh/profile"
+shared_zsh_aliases="${HOME}/.config/zsh/aliases"
+if [ -s "${shared_zsh_profile}" ]; then
+  source "${shared_zsh_profile}"
+fi
+if [ -s "${shared_zsh_aliases}" ]; then
+  source "${shared_zsh_aliases}"
+fi
+
 export PATH="$HOME/.local/bin:$PATH"
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
 autoload -U add-zsh-hook
 load-nvmrc() {
@@ -43,3 +52,5 @@ load-nvmrc() {
 }
 add-zsh-hook chpwd load-nvmrc
 load-nvmrc
+export PATH="$HOME/.rbenv/bin:$PATH"
+eval "$(rbenv init -)"

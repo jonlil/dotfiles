@@ -1,6 +1,6 @@
 [core]
     excludesfile = ~/.gitignore
-    editor = /usr/bin/vim
+    editor = vim
 
 [user]
     signingkey = 94172F95
