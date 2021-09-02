@@ -1,1 +1,11 @@
 alias dotfiles="cd ~/dotfiles"
+alias vi="nvim"
+alias vim="nvim"
+alias view="nvim -R"
+alias vimdiff="nvim -d"
+alias cat="bat"
+alias svim="nvim \$(fzf)"
+alias staged="git diff --staged"
+
+export FZF_DEFAULT_COMMAND='ag --hidden --ignore .git -g ""'
+export FZF_DEFAULT_OPTS='--preview="cat {}"'

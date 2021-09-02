@@ -6,5 +6,11 @@
       "filetypes": ["sh"],
       "ignoredRootPaths": ["~"]
     }
+  },
+  "solargraph.logLevel": "debug",
+  "solargraph.transport": "external",
+  "solargraph.externalServer": {
+    "host": "localhost",
+    "port": 7658
   }
 }

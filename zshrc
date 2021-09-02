@@ -14,8 +14,9 @@ plugins=(
 source $ZSH/oh-my-zsh.sh
 
 source ~/.zsh_profile
-if [ -d "${HOME}/.local/zsh" ] && [ -s "${HOME}/.local/zsh/profile" ]; then
-  source ~/.local/zsh/profile
+if [ -d "${HOME}/.local/zsh" ]; then
+  [ -s "${HOME}/.local/zsh/profile" ] && source ~/.local/zsh/profile
+  [ -s "${HOME}/.local/zsh/aliases" ] && source ~/.local/zsh/aliases
 fi
 
 export PATH="$HOME/.local/bin:$PATH"
@@ -43,3 +44,6 @@ load-nvmrc() {
 }
 add-zsh-hook chpwd load-nvmrc
 load-nvmrc
+
+eval "$(rbenv init -)"
+eval "$(pyenv init --path)"

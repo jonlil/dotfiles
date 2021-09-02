@@ -31,7 +31,9 @@ package_jonlil-base() {
 
 package_jonlil-workstation() {
   depends=(
+    'bat'
     'dmenu'
+    'fzf'
     'gnome-alsamixer'
     'gnome-screenshot'
     'google-chrome'
@@ -39,6 +41,7 @@ package_jonlil-workstation() {
     'i3status'
     'kitty'
     'pavucontrol'
+    'playerctl'
     'pulseaudio'
     'pulseaudio-jack'
     'pulsemixer'
@@ -46,6 +49,7 @@ package_jonlil-workstation() {
     'the_silver_searcher'
     'ttf-libernation'
     'typescript'
+    'v4l-utils'
     'wireshark-qt'
     'xorg-server'
     'xorg-utils'
