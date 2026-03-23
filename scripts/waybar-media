@@ -1,0 +1,39 @@
+#!/bin/sh
+# Show currently playing media as icon + state indicator
+# Output JSON for waybar custom module
+
+player=$(playerctl -l 2>/dev/null | head -1)
+status=$(playerctl -p "$player" status 2>/dev/null)
+
+if [ -z "$player" ] || [ "$status" = "Stopped" ] || [ -z "$status" ]; then
+    echo '{"text": "🎶 ⏹", "tooltip": "Nothing playing", "class": "stopped"}'
+    exit 0
+fi
+
+artist=$(playerctl -p "$player" metadata artist 2>/dev/null)
+title=$(playerctl -p "$player" metadata title 2>/dev/null)
+
+case "$player" in
+    spotify*)         icon="" ;;
+    *chromium*|*chrome*) icon="" ;;
+    *firefox*)        icon="" ;;
+    *)                icon="" ;;
+esac
+
+if [ "$status" = "Playing" ]; then
+    state="▶"
+    class="playing"
+else
+    state="❚❚"
+    class="paused"
+fi
+
+if [ -n "$artist" ] && [ -n "$title" ]; then
+    tooltip="${artist} - ${title}"
+elif [ -n "$title" ]; then
+    tooltip="$title"
+else
+    tooltip="$player"
+fi
+
+printf '{"text": "%s %s", "tooltip": "%s", "class": "%s"}\n' "$icon" "$state" "$tooltip" "$class"

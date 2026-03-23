@@ -1,0 +1,283 @@
+#!/usr/bin/python3
+"""Fetch upcoming events from Google Calendar iCal feeds for eww desktop."""
+
+import json
+import subprocess
+import sys
+from datetime import datetime, timedelta, date
+from zoneinfo import ZoneInfo
+
+def _get_secret(key):
+    result = subprocess.run(
+        ["secret-tool", "lookup", "calendar", key],
+        capture_output=True, text=True,
+    )
+    url = result.stdout.strip()
+    if not url:
+        print(f"Warning: no secret found for calendar '{key}'", file=sys.stderr)
+    return url
+
+
+CALENDARS = [
+    {"name": "Philip", "url": _get_secret("philip"), "color": "peach"},
+    {"name": "Privat", "url": _get_secret("privat"), "color": "blue"},
+    {"name": "GaN", "url": _get_secret("gan"), "color": "green"},
+]
+
+TZ = ZoneInfo("Europe/Stockholm")
+CACHE_DIR = "/tmp/eww-cal"
+
+
+def fetch_ical(url: str, name: str) -> str:
+    import os
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    cache_file = f"{CACHE_DIR}/{name}.ics"
+    try:
+        result = subprocess.run(
+            ["curl", "-s", "--max-time", "10", url],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            with open(cache_file, "w") as f:
+                f.write(result.stdout)
+            return result.stdout
+    except Exception:
+        pass
+    # Fall back to cache
+    try:
+        with open(cache_file) as f:
+            return f.read()
+    except FileNotFoundError:
+        return ""
+
+
+def parse_events(ical_text: str, cal_name: str, cal_color: str, start: datetime, end: datetime):
+    from icalendar import Calendar
+    from icalendar.prop import vDDDTypes
+
+    events = []
+    if not ical_text:
+        return events
+
+    cal = Calendar.from_ical(ical_text)
+    for component in cal.walk():
+        if component.name != "VEVENT":
+            continue
+
+        dtstart = component.get("dtstart")
+        if not dtstart:
+            continue
+        dt = dtstart.dt
+
+        # Handle recurring events
+        rrule = component.get("rrule")
+        if rrule:
+            occurrences = expand_rrule(component, start, end)
+            for occ_start, occ_end in occurrences:
+                events.append(make_event(component, occ_start, occ_end, cal_name, cal_color))
+            continue
+
+        # Single event
+        if isinstance(dt, datetime):
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=TZ)
+            dt = dt.astimezone(TZ)
+            if dt < start or dt >= end:
+                continue
+            dtend = component.get("dtend")
+            end_dt = dtend.dt if dtend else dt + timedelta(hours=1)
+            if isinstance(end_dt, datetime) and end_dt.tzinfo is None:
+                end_dt = end_dt.replace(tzinfo=TZ)
+            if isinstance(end_dt, datetime):
+                end_dt = end_dt.astimezone(TZ)
+            events.append(make_event(component, dt, end_dt, cal_name, cal_color))
+        elif isinstance(dt, date):
+            if dt < start.date() or dt >= end.date():
+                continue
+            dtend = component.get("dtend")
+            end_dt = dtend.dt if dtend else dt + timedelta(days=1)
+            events.append(make_event(component, dt, end_dt, cal_name, cal_color))
+
+    return events
+
+
+def expand_rrule(component, start, end):
+    """Expand recurring events within the date range."""
+    try:
+        from icalendar import Calendar
+        from dateutil.rrule import rrulestr
+        from dateutil.tz import tzlocal
+
+        dtstart = component.get("dtstart").dt
+        rrule = component.get("rrule")
+        rule_str = rrule.to_ical().decode()
+
+        if isinstance(dtstart, datetime):
+            if dtstart.tzinfo is None:
+                dtstart = dtstart.replace(tzinfo=TZ)
+        elif isinstance(dtstart, date):
+            dtstart = datetime.combine(dtstart, datetime.min.time(), tzinfo=TZ)
+
+        duration = timedelta(hours=1)
+        dtend = component.get("dtend")
+        if dtend:
+            end_dt = dtend.dt
+            if isinstance(end_dt, date) and not isinstance(end_dt, datetime):
+                end_dt = datetime.combine(end_dt, datetime.min.time(), tzinfo=TZ)
+            elif isinstance(end_dt, datetime) and end_dt.tzinfo is None:
+                end_dt = end_dt.replace(tzinfo=TZ)
+            duration = end_dt - dtstart
+
+        rule = rrulestr(f"RRULE:{rule_str}", dtstart=dtstart)
+        occurrences = []
+        for occ in rule.between(start, end, inc=True):
+            if occ.tzinfo is None:
+                occ = occ.replace(tzinfo=TZ)
+            occurrences.append((occ, occ + duration))
+        return occurrences
+    except Exception:
+        return []
+
+
+def make_event(component, dt_start, dt_end, cal_name, cal_color):
+    summary = str(component.get("summary", "No title"))
+    all_day = isinstance(dt_start, date) and not isinstance(dt_start, datetime)
+
+    if all_day:
+        time_str = "All day"
+    else:
+        if isinstance(dt_start, datetime):
+            time_str = dt_start.strftime("%H:%M")
+            if isinstance(dt_end, datetime):
+                time_str += f"–{dt_end.strftime('%H:%M')}"
+
+    if isinstance(dt_start, date) and not isinstance(dt_start, datetime):
+        sort_key = datetime.combine(dt_start, datetime.min.time(), tzinfo=TZ)
+        date_str = dt_start.strftime("%a %d/%m")
+    else:
+        sort_key = dt_start
+        date_str = dt_start.strftime("%a %d/%m")
+
+    return {
+        "summary": summary,
+        "time": time_str,
+        "date": date_str,
+        "calendar": cal_name,
+        "color": cal_color,
+        "all_day": all_day,
+        "sort_key": sort_key,
+    }
+
+
+WEEKDAYS_SV = {
+    "Monday": "Måndag",
+    "Tuesday": "Tisdag",
+    "Wednesday": "Onsdag",
+    "Thursday": "Torsdag",
+    "Friday": "Fredag",
+    "Saturday": "Lördag",
+    "Sunday": "Söndag",
+}
+
+# Which calendars go in "mine" vs "philip"
+MINE = {"Privat", "GaN"}
+PHILIP = {"Philip"}
+
+
+def day_label(event_date, today, tomorrow):
+    if event_date == today:
+        return "Idag"
+    elif event_date == tomorrow:
+        return "Imorgon"
+    else:
+        weekday = WEEKDAYS_SV.get(event_date.strftime("%A"), event_date.strftime("%A"))
+        return f"{weekday} {event_date.strftime('%d/%m')}"
+
+
+def group_events(events, cal_filter, today, tomorrow, now, max_days=3):
+    # First pass: find the first event date to anchor the 3-day window
+    first_event_date = None
+    for event in events:
+        if event["calendar"] not in cal_filter:
+            continue
+        sk = event["sort_key"]
+        event_date = sk.date() if isinstance(sk, datetime) else sk
+
+        # Skip ended events today
+        if event_date == today and not event["all_day"] and "\u2013" in event["time"]:
+            end_str = event["time"].split("\u2013")[1]
+            try:
+                end_time = datetime.strptime(end_str, "%H:%M").replace(
+                    year=now.year, month=now.month, day=now.day, tzinfo=TZ
+                )
+                if end_time < now:
+                    continue
+            except ValueError:
+                pass
+
+        if first_event_date is None or event_date < first_event_date:
+            first_event_date = event_date
+
+    if first_event_date is None:
+        return []
+
+    cutoff = first_event_date + timedelta(days=max_days)
+
+    day_groups = {}
+    for event in events:
+        if event["calendar"] not in cal_filter:
+            continue
+
+        sk = event["sort_key"]
+        event_date = sk.date() if isinstance(sk, datetime) else sk
+
+        if event_date >= cutoff:
+            continue
+
+        # Skip ended events today
+        if event_date == today and not event["all_day"] and "\u2013" in event["time"]:
+            end_str = event["time"].split("\u2013")[1]
+            try:
+                end_time = datetime.strptime(end_str, "%H:%M").replace(
+                    year=now.year, month=now.month, day=now.day, tzinfo=TZ
+                )
+                if end_time < now:
+                    continue
+            except ValueError:
+                pass
+
+        ev = {k: v for k, v in event.items() if k != "sort_key"}
+        label = day_label(event_date, today, tomorrow)
+        if label not in day_groups:
+            day_groups[label] = []
+        day_groups[label].append(ev)
+
+    return [{"label": l, "events": e} for l, e in day_groups.items()]
+
+
+def main():
+    now = datetime.now(TZ)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = today_start + timedelta(days=7)
+
+    all_events = []
+    for cal in CALENDARS:
+        ical_text = fetch_ical(cal["url"], cal["name"])
+        events = parse_events(ical_text, cal["name"], cal["color"], today_start, end)
+        all_events.extend(events)
+
+    all_events.sort(key=lambda e: e["sort_key"])
+
+    today = now.date()
+    tomorrow = today + timedelta(days=1)
+
+    result = {
+        "mine": group_events(all_events, MINE, today, tomorrow, now, max_days=3),
+        "philip": group_events(all_events, PHILIP, today, tomorrow, now, max_days=3),
+    }
+
+    print(json.dumps(result))
+
+
+if __name__ == "__main__":
+    main()

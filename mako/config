@@ -1,0 +1,28 @@
+font=JetBrainsMono Nerd Font 11
+background-color=#181825cc
+text-color=#a6adc8
+border-color=#585b70
+border-size=1
+border-radius=16
+padding=10,16
+margin=10
+width=340
+default-timeout=3000
+max-visible=3
+layer=overlay
+anchor=top-right
+icon-path=/usr/share/icons/Papirus-Dark
+max-icon-size=48
+progress-color=over #89b4fa
+
+[urgency=low]
+border-color=#585b70
+background-color=#181825ee
+
+[urgency=high]
+border-color=#f38ba8
+background-color=#1e1e2eee
+default-timeout=10000
+
+[summary="Claude Code"]
+invisible=1

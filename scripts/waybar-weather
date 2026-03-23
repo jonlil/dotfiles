@@ -1,0 +1,35 @@
+#!/bin/sh
+# Fetch weather for Stockholm using wttr.in
+# Output JSON for waybar custom module
+
+data=$(curl -sf "https://wttr.in/Stockholm?format=j1" 2>/dev/null)
+
+if [ -z "$data" ]; then
+    echo '{"text": " --°", "tooltip": "Weather unavailable"}'
+    exit 0
+fi
+
+# API wraps in "data" object
+temp=$(echo "$data" | jq -r '.data.current_condition[0].temp_C // .current_condition[0].temp_C')
+feel=$(echo "$data" | jq -r '.data.current_condition[0].FeelsLikeC // .current_condition[0].FeelsLikeC')
+desc=$(echo "$data" | jq -r '.data.current_condition[0].weatherDesc[0].value // .current_condition[0].weatherDesc[0].value')
+humidity=$(echo "$data" | jq -r '.data.current_condition[0].humidity // .current_condition[0].humidity')
+wind=$(echo "$data" | jq -r '.data.current_condition[0].windspeedKmph // .current_condition[0].windspeedKmph')
+code=$(echo "$data" | jq -r '.data.current_condition[0].weatherCode // .current_condition[0].weatherCode')
+
+# Map weather code to emoji
+case "$code" in
+    113) icon="☀️" ;;
+    116) icon="⛅" ;;
+    119|122) icon="☁️" ;;
+    143|248|260) icon="🌫️" ;;
+    176|263|266|293|296) icon="🌦️" ;;
+    299|302|305|308|356|359) icon="🌧️" ;;
+    179|227|230|323|326|329|332|335|338|368|371) icon="❄️" ;;
+    200|386|389|392|395) icon="⛈️" ;;
+    *) icon="🌤️" ;;
+esac
+
+tooltip="${desc}\nFeels like: ${feel}°C\nHumidity: ${humidity}%\nWind: ${wind} km/h"
+
+printf '{"text": "%s %s°", "tooltip": "%s"}\n' "$icon" "$temp" "$tooltip"

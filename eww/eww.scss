@@ -1,0 +1,353 @@
+// ── Catppuccin Mocha palette ──────────────────────────────────
+$crust:    #11111b;
+$base:     #1e1e2e;
+$mantle:   #181825;
+$surface0: #313244;
+$surface1: #45475a;
+$overlay0: #6c7086;
+$subtext0: #a6adc8;
+$text:     #cdd6f4;
+$blue:     #89b4fa;
+$teal:     #94e2d5;
+$green:    #a6e3a1;
+$mauve:    #cba6f7;
+$peach:    #fab387;
+$red:      #f38ba8;
+$yellow:   #f9e2af;
+
+// ── Window ──────────────────────────────────────────────────
+window {
+  background-color: transparent;
+}
+
+// ── Desktop columns ───────────────────────────────────────────
+.desktop-col {
+  min-width: 300px;
+}
+
+// ── Clock ─────────────────────────────────────────────────────
+.clock {
+  padding: 16px;
+}
+
+.clock-time {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 96px;
+  font-weight: bold;
+  color: $blue;
+  letter-spacing: -3px;
+}
+
+.clock-date {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 18px;
+  color: $subtext0;
+  margin-top: -8px;
+  letter-spacing: 1px;
+}
+
+// ── Cards ─────────────────────────────────────────────────────
+.card {
+  background-color: rgba($base, 0.75);
+  border-radius: 16px;
+  border: 1px solid rgba($surface1, 0.5);
+  padding: 20px 24px;
+}
+
+.card-label {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 10px;
+  font-weight: bold;
+  color: $overlay0;
+  margin-bottom: 12px;
+  letter-spacing: 1.5px;
+  min-width: 120px;
+}
+
+// ── Stat columns (used in toggl + weather) ────────────────────
+.stat-value {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 14px;
+  font-weight: bold;
+  color: $text;
+}
+
+.stat-label {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 10px;
+  color: $overlay0;
+}
+
+// ── Toggl ─────────────────────────────────────────────────────
+.toggl-status {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 11px;
+  color: $overlay0;
+}
+
+.toggl-task {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 15px;
+  color: $green;
+}
+
+.toggl-stats {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba($surface1, 0.5);
+}
+
+// ── Weather ───────────────────────────────────────────────────
+.weather-emoji {
+  font-size: 24px;
+}
+
+.weather-temp {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 14px;
+  font-weight: bold;
+  color: $peach;
+}
+
+.weather-desc {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 13px;
+  color: $subtext0;
+}
+
+.weather-details {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgba($surface1, 0.5);
+}
+
+.weather-forecast {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba($surface1, 0.5);
+  min-height: 100px;
+}
+
+.weather-sun-text {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 12px;
+  color: $yellow;
+}
+
+.forecast-col {
+  min-width: 0;
+}
+
+.forecast-temp {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 10px;
+  color: $text;
+}
+
+.forecast-pad {
+  background-color: transparent;
+}
+
+.forecast-bar {
+  background-color: $peach;
+  border-radius: 2px;
+  min-width: 8px;
+}
+
+.forecast-rain {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 9px;
+  color: $blue;
+  min-height: 14px;
+}
+
+.forecast-hour {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 10px;
+  color: $overlay0;
+}
+
+.weather-daily {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba($surface1, 0.5);
+}
+
+.weather-daily-row {
+  padding: 2px 0;
+}
+
+.weather-daily-day {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 12px;
+  color: $subtext0;
+  min-width: 36px;
+}
+
+.weather-daily-emoji {
+  font-size: 14px;
+  min-width: 24px;
+}
+
+.weather-daily-temp {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 12px;
+  color: $text;
+}
+
+// ── System bars ───────────────────────────────────────────────
+.system-bar-item {
+  margin: 4px 0;
+}
+
+.bar-label {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 11px;
+  color: $subtext0;
+  margin-bottom: 2px;
+}
+
+.bar-detail {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 10px;
+  color: $overlay0;
+  margin-right: 8px;
+}
+
+.bar-value {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 11px;
+  color: $text;
+  min-width: 36px;
+}
+
+.uptime-row {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba($surface1, 0.5);
+}
+
+progress {
+  min-height: 6px;
+  border-radius: 3px;
+  background-color: rgba($surface0, 0.6);
+  border: none;
+  outline: none;
+  box-shadow: none;
+  margin-right: 4px;
+}
+
+progress > trough {
+  min-height: 6px;
+  border-radius: 3px;
+  background-color: rgba($surface0, 0.6);
+  border: none;
+  outline: none;
+}
+
+.prog-teal > trough > progress {
+  background-color: $teal;
+  border-radius: 3px;
+}
+
+.prog-mauve > trough > progress {
+  background-color: $mauve;
+  border-radius: 3px;
+}
+
+.prog-peach > trough > progress {
+  background-color: $peach;
+  border-radius: 3px;
+}
+
+// ── Media ─────────────────────────────────────────────────────
+.media-title {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 15px;
+  font-weight: bold;
+  color: $text;
+}
+
+.media-artist {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 13px;
+  color: $green;
+}
+
+.media-player {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 10px;
+  color: $overlay0;
+  margin-top: 4px;
+}
+
+// ── System panel ─────────────────────────────────────────────
+.system-panel {
+  min-width: 300px;
+  margin: 46px 0 0 12px;
+}
+
+// ── Calendar ──────────────────────────────────────────────────
+.agenda-panel {
+  min-width: 300px;
+  margin: 46px 12px 0 0;
+}
+
+.agenda-spacer {
+  min-height: 4px;
+}
+
+.agenda-card {
+  min-width: 280px;
+  padding: 14px 16px;
+}
+
+.cal-section-title {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 11px;
+  font-weight: bold;
+  color: $subtext0;
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+
+.cal-event {
+  margin: 2px 0;
+  padding: 4px 6px;
+  background-color: rgba($surface0, 0.4);
+  border-radius: 6px;
+}
+
+.cal-dot {
+  min-width: 4px;
+  min-height: 32px;
+  border-radius: 2px;
+}
+
+.cal-dot-peach { background-color: $peach; }
+.cal-dot-blue { background-color: $blue; }
+.cal-dot-green { background-color: $green; }
+
+.cal-event-summary {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 13px;
+  color: $text;
+}
+
+.cal-event-time {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 11px;
+  color: $subtext0;
+}
+
+.cal-event-cal {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 10px;
+  color: $overlay0;
+}
+
+.cal-empty {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 13px;
+  color: $overlay0;
+}

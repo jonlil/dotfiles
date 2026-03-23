@@ -1,0 +1,20 @@
+#!/bin/sh
+# Manage pipewire around suspend to avoid race conditions
+# with USB device re-enumeration (Jabra Link 380).
+#
+# Pre-suspend:  stop services but keep sockets alive
+# Post-resume:  socket activation restarts pipewire on demand
+
+USER_UID=1000
+
+case "$1" in
+    pre)
+        /usr/bin/systemctl --user -M "${USER_UID}@" stop pipewire{,-pulse} wireplumber
+        ;;
+    post)
+        # Small delay for USB controller reinit, then ensure
+        # pipewire is running (in case nothing triggers socket activation)
+        sleep 2
+        /usr/bin/systemctl --user -M "${USER_UID}@" start pipewire{,-pulse} wireplumber
+        ;;
+esac

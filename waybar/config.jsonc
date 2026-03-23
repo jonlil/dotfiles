@@ -1,0 +1,128 @@
+{
+    "height": 34,
+    "spacing": 0,
+    "margin-top": 4,
+    "margin-left": 8,
+    "margin-right": 8,
+    "modules-left": [
+        "hyprland/workspaces",
+        "custom/media",
+        "hyprland/window"
+    ],
+    "modules-center": [
+        "clock"
+    ],
+    "modules-right": [
+        "custom/toggl",
+        "custom/weather",
+        "custom/spacer-1",
+        "pulseaudio",
+        "custom/spacer-2",
+        "network",
+        "custom/spacer-3",
+        "cpu",
+        "memory",
+        "temperature",
+        "battery",
+        "custom/spacer-4",
+        "backlight",
+        "custom/spacer-5",
+        "tray"
+    ],
+    "custom/spacer-1": { "format": "", "tooltip": false },
+    "custom/spacer-2": { "format": "", "tooltip": false },
+    "custom/spacer-3": { "format": "", "tooltip": false },
+    "custom/spacer-4": { "format": "", "tooltip": false },
+    "custom/spacer-5": { "format": "", "tooltip": false },
+    "hyprland/workspaces": {
+        "format": "{icon}",
+        "format-icons": {
+            "1": "💬",
+            "2": "📬",
+            "3": "🌐",
+            "4": "💻",
+            "5": "🔧",
+            "6": "📹",
+            "7": "7",
+            "8": "🎵",
+            "9": "9",
+            "default": "○"
+        },
+        "persistent-workspaces": {
+            "*": [ 1, 2, 3, 4, 5, 6, 8 ]
+        }
+    },
+    "custom/media": {
+        "exec": "~/.local/bin/waybar-media",
+        "return-type": "json",
+        "interval": 5,
+        "on-click": "playerctl play-pause",
+        "tooltip": true
+    },
+    "hyprland/window": {
+        "max-length": 40,
+        "separate-outputs": true
+    },
+    "clock": {
+        "format": "{:%H:%M %a %d/%m v%V}",
+        "format-alt": "{:%A %d %B %Y}",
+        "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>"
+    },
+    "custom/weather": {
+        "exec": "~/.local/bin/waybar-weather",
+        "return-type": "json",
+        "interval": 900,
+        "tooltip": true
+    },
+    "custom/toggl": {
+        "exec": "~/.local/bin/waybar-toggl",
+        "return-type": "json",
+        "interval": 120,
+        "tooltip": true
+    },
+    "cpu": {
+        "format": "🖥️ {usage}%",
+        "tooltip": false
+    },
+    "memory": {
+        "format": "🧠 {}%"
+    },
+    "temperature": {
+        "hwmon-path-abs": "/sys/devices/platform/coretemp.0/hwmon",
+        "input-filename": "temp1_input",
+        "critical-threshold": 80,
+        "format": "🌡️ {temperatureC}°C",
+        "format-critical": "🔥 {temperatureC}°C"
+    },
+    "backlight": {
+        "format": "☀️ {percent}%"
+    },
+    "battery": {
+        "states": {
+            "warning": 30,
+            "critical": 15
+        },
+        "format": "🔋 {capacity}%",
+        "format-full": "🔋 {capacity}%",
+        "format-charging": "⚡ {capacity}%",
+        "format-plugged": "🔌 {capacity}%",
+        "format-alt": "🔋 {time}"
+    },
+    "network": {
+        "format-wifi": "📶 {signalStrength}%",
+        "format-ethernet": "🌐 {ipaddr}",
+        "format-disconnected": "❌ ",
+        "tooltip-format-wifi": "{essid} ({signalStrength}%)\n{ipaddr}/{cidr}",
+        "tooltip-format": "{ifname} via {gwaddr}"
+    },
+    "pulseaudio": {
+        "format": "🔊 {volume}%",
+        "format-bluetooth": "🎧 {volume}%",
+        "format-muted": "🔇 ",
+        "on-click": "pavucontrol"
+    },
+    "tray": {
+        "icon-size": 16,
+        "spacing": 8
+    }
+}

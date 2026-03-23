@@ -1,0 +1,26 @@
+#!/bin/sh
+# Routes volume commands to either system audio (PipeWire) or SmartThings (TV)
+# Priority: Jabra running → wpctl, Spotify on TV → smartycrank, fallback → wpctl
+# Usage: volume-router up|down|mute
+
+ACTION="$1"
+SMARTYCRANK="$HOME/Projects/jonlil/smartycrank/target/release/smartycrank"
+
+# Check if Jabra sink is actively running
+jabra_state=$(pw-cli info $(pw-cli ls Node 2>/dev/null | grep -B5 "Jabra" | head -1 | tr -dc '0-9') 2>/dev/null | grep "state:" | awk '{print $2}' | tr -d '"')
+
+if [ "$jabra_state" != "running" ]; then
+    # Jabra not active, try SmartThings TV via smartycrank (exits 0 if Spotify on TV)
+    case "$ACTION" in
+        up)   "$SMARTYCRANK" up 2>/dev/null && exit 0 ;;
+        down) "$SMARTYCRANK" down 2>/dev/null && exit 0 ;;
+        mute) "$SMARTYCRANK" mute 2>/dev/null && exit 0 ;;
+    esac
+fi
+
+# Fallback to system volume
+case "$ACTION" in
+    up)   wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+ ;;
+    down) wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- ;;
+    mute) wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle ;;
+esac

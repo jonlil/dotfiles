@@ -1,0 +1,13 @@
+eww 0.6.0-1
+globalprotect-openconnect-git 2.5.1.r4.g9777258-1
+google-chrome 145.0.7632.45-1
+minecraft-launcher 1:2.1.3-3
+openoffice-bin 4.1.16-1
+paru-git 2.1.0.r67.g9ac3578-1
+paru-git-debug 2.0.3.rebuild.1.r1.g90656a9-1
+pdk 3.4.0.1-1
+qimgv 1.0.3+alpha+94+ge2675f13-1
+slack-desktop-wayland 4.47.69-1
+stripe-cli 1.35.0-1
+tizen-sdb 2.3.2-3
+visual-studio-code-bin 1.109.2-1

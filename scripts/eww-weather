@@ -1,0 +1,163 @@
+#!/usr/bin/python3
+"""Fetch weather data from wttr.in for eww desktop widget."""
+
+import json
+import subprocess
+import sys
+from datetime import datetime
+
+CACHE_FILE = "/tmp/eww-weather.json"
+CITY = "Stockholm"
+
+WEATHER_EMOJI = {
+    "113": "☀️", "116": "⛅", "119": "☁️", "122": "☁️",
+    "143": "🌫️", "176": "🌦️", "179": "🌨️", "182": "🌨️",
+    "185": "🌨️", "200": "⛈️", "227": "❄️", "230": "❄️",
+    "248": "🌫️", "260": "🌫️", "263": "🌦️", "266": "🌦️",
+    "281": "🌨️", "284": "🌨️", "293": "🌦️", "296": "🌧️",
+    "299": "🌧️", "302": "🌧️", "305": "🌧️", "308": "🌧️",
+    "311": "🌨️", "314": "🌨️", "317": "🌨️", "320": "❄️",
+    "323": "❄️", "326": "❄️", "329": "❄️", "332": "❄️",
+    "335": "❄️", "338": "❄️", "350": "🌨️", "353": "🌦️",
+    "356": "🌧️", "359": "🌧️", "362": "🌨️", "365": "🌨️",
+    "368": "❄️", "371": "❄️", "374": "🌨️", "377": "🌨️",
+    "386": "⛈️", "389": "⛈️", "392": "⛈️", "395": "❄️",
+}
+
+
+
+def fetch():
+    try:
+        result = subprocess.run(
+            ["curl", "-sf", "--max-time", "10", f"wttr.in/{CITY}?format=j1"],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            data = json.loads(result.stdout)
+            # Unwrap if nested in "data" key
+            if "data" in data and "current_condition" not in data:
+                data = data["data"]
+            with open(CACHE_FILE, "w") as f:
+                json.dump(data, f)
+            return data
+    except Exception:
+        pass
+    try:
+        with open(CACHE_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def parse_12h(s):
+    """Convert '05:50 AM' to '05:50'."""
+    return datetime.strptime(s.strip(), "%I:%M %p").strftime("%H:%M")
+
+
+def build_forecast(data):
+    now = datetime.now()
+
+    hours = []
+    for day in data.get("weather", []):
+        date_str = day["date"]
+        for h in day.get("hourly", []):
+            time_val = int(h["time"]) // 100
+            hour_dt = datetime.strptime(f"{date_str} {time_val:02d}:00", "%Y-%m-%d %H:%M")
+            if hour_dt >= now.replace(minute=0, second=0, microsecond=0):
+                hours.append({
+                    "hour": f"{time_val:02d}",
+                    "temp": int(h["tempC"]),
+                    "rain": int(h.get("chanceofrain", 0)),
+                    "emoji": WEATHER_EMOJI.get(h["weatherCode"], "🌤️"),
+                })
+            if len(hours) >= 12:
+                break
+        if len(hours) >= 12:
+            break
+
+    if not hours:
+        return {"hours": []}
+
+    temps = [h["temp"] for h in hours]
+    min_t = min(temps)
+    max_t = max(temps)
+    temp_range = max_t - min_t if max_t != min_t else 1
+
+    max_bar_px = 60
+    min_bar_px = 8
+    for h in hours:
+        ratio = (h["temp"] - min_t) / temp_range
+        h["bar_px"] = int(ratio * (max_bar_px - min_bar_px) + min_bar_px)
+        h["top_pad"] = max_bar_px - h["bar_px"]
+
+    return {"hours": hours}
+
+
+def main():
+    data = fetch()
+    if not data:
+        print(json.dumps({
+            "temp": "?", "emoji": "❓", "desc": "", "feels": "", "humidity": "", "wind": "",
+            "hours": [], "sun": "", "uv": "", "daily": [],
+        }))
+        return
+
+    cc = data.get("current_condition", [{}])[0]
+    forecast = build_forecast(data)
+
+    # Sunrise / sunset
+    sun = ""
+    try:
+        astro = data["weather"][0]["astronomy"][0]
+        sun = f"{parse_12h(astro['sunrise'])} – {parse_12h(astro['sunset'])}"
+    except (KeyError, IndexError, ValueError):
+        pass
+
+    # UV index (from current hour's forecast)
+    uv = ""
+    try:
+        now_h = datetime.now().hour
+        for h in data["weather"][0]["hourly"]:
+            if int(h["time"]) // 100 >= now_h:
+                uv = f"UV {h['uvIndex']}"
+                break
+    except (KeyError, IndexError):
+        pass
+
+    # Daily forecast (tomorrow + day after)
+    daily = []
+    for day_data in data.get("weather", [])[1:3]:
+        try:
+            date_obj = datetime.strptime(day_data["date"], "%Y-%m-%d")
+            midday = day_data["hourly"][4]  # 12:00
+            daily.append({
+                "day": date_obj.strftime("%a"),
+                "emoji": WEATHER_EMOJI.get(midday["weatherCode"], "🌤️"),
+                "min": day_data["mintempC"],
+                "max": day_data["maxtempC"],
+            })
+        except (KeyError, IndexError):
+            pass
+
+    result = {
+        "temp": cc.get("temp_C", "?"),
+        "emoji": WEATHER_EMOJI.get(cc.get("weatherCode", ""), "🌤️"),
+        "desc": cc.get("weatherDesc", [{}])[0].get("value", "").strip(),
+        "feels": f"{cc.get('FeelsLikeC', '?')}°",
+        "humidity": f"{cc.get('humidity', '?')}%",
+        "wind": f"{cc.get('windspeedKmph', '?')} km/h",
+        "hours": forecast.get("hours", []),
+        "sun": sun,
+        "uv": uv,
+        "daily": daily,
+    }
+
+    output = json.dumps(result)
+    # Save parsed output for other polls to read
+    with open("/tmp/eww-weather-parsed.json", "w") as f:
+        f.write(output)
+    print(output)
+
+
+if __name__ == "__main__":
+    main()

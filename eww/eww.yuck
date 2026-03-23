@@ -1,0 +1,257 @@
+; ── Poll variables ──────────────────────────────────────────────
+
+(defpoll clock_time :interval "1s"
+  `date '+%H:%M'`)
+
+(defpoll clock_date :interval "60s"
+  `date '+%A %d %B'`)
+
+; ── Toggl (cached to single call) ──────────────────────────────
+(defpoll toggl_text :interval "120s"
+  `export PATH="/home/jonas/.local/bin:$PATH"; T=/tmp/eww-toggl; waybar-toggl > $T 2>/dev/null; jq -r '.text // ""' < $T`)
+
+(defpoll toggl_today :interval "120s"
+  `T=/tmp/eww-toggl; [ -f $T ] && jq -r '.tooltip // ""' < $T | grep -oP 'Idag: \\K\\d+h' || echo "0h"`)
+
+(defpoll toggl_week :interval "120s"
+  `T=/tmp/eww-toggl; [ -f $T ] && jq -r '.tooltip // ""' < $T | grep -oP 'Vecka: \\K\\d+h' || echo "0h"`)
+
+(defpoll toggl_month :interval "120s"
+  `T=/tmp/eww-toggl; [ -f $T ] && jq -r '.tooltip // ""' < $T | grep -oP 'Månad: \\K\\d+h' || echo "0h"`)
+
+; ── Weather (eww-weather script caches internally) ─────────────
+(defpoll weather_temp :interval "600s"
+  `/home/jonas/dotfiles/scripts/eww-weather | jq -r '.temp // "?"'`)
+
+(defpoll weather_emoji :interval "600s"
+  `cat /tmp/eww-weather-parsed.json 2>/dev/null | jq -r '.emoji // ""' || echo ""`)
+
+(defpoll weather_desc :interval "600s"
+  `cat /tmp/eww-weather-parsed.json 2>/dev/null | jq -r '.desc // ""' || echo ""`)
+
+(defpoll weather_feels :interval "600s"
+  `cat /tmp/eww-weather-parsed.json 2>/dev/null | jq -r '.feels // ""' || echo ""`)
+
+(defpoll weather_humidity :interval "600s"
+  `cat /tmp/eww-weather-parsed.json 2>/dev/null | jq -r '.humidity // ""' || echo ""`)
+
+(defpoll weather_wind :interval "600s"
+  `cat /tmp/eww-weather-parsed.json 2>/dev/null | jq -r '.wind // ""' || echo ""`)
+
+(defpoll weather_sun :interval "600s"
+  `cat /tmp/eww-weather-parsed.json 2>/dev/null | jq -r '.sun // ""' || echo ""`)
+
+(defpoll weather_uv :interval "600s"
+  `cat /tmp/eww-weather-parsed.json 2>/dev/null | jq -r '.uv // ""' || echo ""`)
+
+(defpoll weather_hours :interval "600s"
+  `cat /tmp/eww-weather-parsed.json 2>/dev/null | jq -c '.hours // []' || echo "[]"`)
+
+(defpoll weather_daily :interval "600s"
+  `cat /tmp/eww-weather-parsed.json 2>/dev/null | jq -c '.daily // []' || echo "[]"`)
+
+; ── System ─────────────────────────────────────────────────────
+(defpoll cpu_usage :interval "2s"
+  `awk '/^cpu /{printf "%.0f", ($2+$4)*100/($2+$4+$5)}' /proc/stat`)
+
+(defpoll ram_usage :interval "5s"
+  `free | awk '/Mem:/{printf "%.0f", $3/$2*100}'`)
+
+(defpoll ram_used :interval "5s"
+  `free -h | awk '/Mem:/{print $3}'`)
+
+(defpoll ram_total :interval "60s"
+  `free -h | awk '/Mem:/{print $2}'`)
+
+(defpoll disk_root_usage :interval "60s"
+  `df / | awk 'NR==2{print $5}' | tr -d '%'`)
+(defpoll disk_root_detail :interval "60s"
+  `df -h / | awk 'NR==2{printf "%s/%s", $3, $2}'`)
+
+(defpoll disk_home_usage :interval "60s"
+  `df /home | awk 'NR==2{print $5}' | tr -d '%'`)
+(defpoll disk_home_detail :interval "60s"
+  `df -h /home | awk 'NR==2{printf "%s/%s", $3, $2}'`)
+
+(defpoll disk_lib_usage :interval "60s"
+  `df /var/lib | awk 'NR==2{print $5}' | tr -d '%'`)
+(defpoll disk_lib_detail :interval "60s"
+  `df -h /var/lib | awk 'NR==2{printf "%s/%s", $3, $2}'`)
+
+(defpoll cpu_temp :interval "5s"
+  `sensors 2>/dev/null | awk '/Package id 0:/{gsub(/[^0-9.]/, "", $4); printf "%.0f", $4}'`)
+
+(defpoll uptime :interval "60s"
+  `uptime -p | sed 's/up //'`)
+
+; ── Media (parsed fields) ──────────────────────────────────────
+(defpoll media_status :interval "3s"
+  `waybar-media | jq -r '.class // "stopped"'`)
+
+(defpoll media_artist :interval "3s"
+  `playerctl metadata artist 2>/dev/null || echo ""`)
+
+(defpoll media_title :interval "3s"
+  `playerctl metadata title 2>/dev/null || echo "Nothing playing"`)
+
+(defpoll media_player :interval "3s"
+  `playerctl -l 2>/dev/null | head -1 | sed 's/\..*//' || echo ""`)
+
+; ── Calendar ───────────────────────────────────────────────────
+(defpoll cal_json :interval "300s"
+  `/home/jonas/dotfiles/scripts/eww-calendar`)
+
+; ── Widgets ────────────────────────────────────────────────────
+
+(defwidget clock []
+  (box :class "clock" :orientation "v" :space-evenly false :halign "center" :valign "center"
+    (label :class "clock-time" :text clock_time)
+    (label :class "clock-date" :text clock_date)))
+
+(defwidget toggl []
+  (box :class "card" :orientation "v" :space-evenly false
+    (label :class "card-label" :text "TOGGL" :halign "start")
+    (box :orientation "v" :space-evenly false :spacing 8
+      (label :class "toggl-task" :text toggl_text :halign "start" :limit-width 35)
+      (box :orientation "h" :space-evenly true :class "toggl-stats"
+        (box :orientation "v" :space-evenly false :halign "center"
+          (label :class "stat-value" :text toggl_today)
+          (label :class "stat-label" :text "today"))
+        (box :orientation "v" :space-evenly false :halign "center"
+          (label :class "stat-value" :text toggl_week)
+          (label :class "stat-label" :text "week"))
+        (box :orientation "v" :space-evenly false :halign "center"
+          (label :class "stat-value" :text toggl_month)
+          (label :class "stat-label" :text "month"))))))
+
+(defwidget weather []
+  (box :class "card" :orientation "v" :space-evenly false
+    (label :class "card-label" :text "WEATHER" :halign "start")
+    (box :orientation "v" :space-evenly false :spacing 6
+      ;; Row 1: emoji + desc (left), sun times (right)
+      (box :orientation "h" :space-evenly false :spacing 10
+        (label :class "weather-emoji" :text weather_emoji)
+        (label :class "weather-desc" :text weather_desc :halign "start" :hexpand true)
+        (label :class "weather-sun-text" :text "☀ ${weather_sun}" :halign "end"))
+      ;; Row 2: temp/feels, humidity, wind, UV
+      (box :orientation "h" :space-evenly true :class "weather-details"
+        (box :orientation "v" :space-evenly false :halign "center"
+          (label :class "stat-value" :text "${weather_temp}° / ${weather_feels}")
+          (label :class "stat-label" :text "feels like"))
+        (box :orientation "v" :space-evenly false :halign "center"
+          (label :class "stat-value" :text weather_humidity)
+          (label :class "stat-label" :text "humidity"))
+        (box :orientation "v" :space-evenly false :halign "center"
+          (label :class "stat-value" :text weather_wind)
+          (label :class "stat-label" :text "wind"))
+        (box :orientation "v" :space-evenly false :halign "center"
+          (label :class "stat-value" :text weather_uv)
+          (label :class "stat-label" :text "uv index")))
+      ;; Forecast graph
+      (box :orientation "h" :space-evenly true :class "weather-forecast" :halign "fill"
+        (for h in {weather_hours != "" && weather_hours != "[]" ? weather_hours : "[]"}
+          (box :orientation "v" :space-evenly false :halign "center" :class "forecast-col"
+            (label :class "forecast-temp" :text "${h.temp}°")
+            (box :class "forecast-pad" :style "min-height: ${h.top_pad}px;")
+            (box :class "forecast-bar" :style "min-height: ${h.bar_px}px;")
+            (label :class "forecast-rain" :text {h.rain > 0 ? "${h.rain}%" : ""})
+            (label :class "forecast-hour" :text {h.hour}))))
+      ;; Daily forecast: horizontal
+      (box :orientation "h" :space-evenly true :class "weather-daily"
+        (for day in {weather_daily != "" && weather_daily != "[]" ? weather_daily : "[]"}
+          (box :orientation "h" :space-evenly false :spacing 8 :class "weather-daily-row"
+            (label :class "weather-daily-day" :text {day.day})
+            (label :class "weather-daily-emoji" :text {day.emoji})
+            (label :class "weather-daily-temp" :text "${day.min}°/${day.max}°")))))))
+
+(defwidget system-bar [value label color detail]
+  (box :orientation "v" :space-evenly false :class "system-bar-item"
+    (box :orientation "h" :space-evenly false
+      (label :class "bar-label" :text label :halign "start" :hexpand true)
+      (label :class "bar-detail" :text detail)
+      (label :class "bar-value" :text " ${value}%"))
+    (progress :class "prog-${color}" :value {value ?: 0} :orientation "h")))
+
+(defwidget system []
+  (box :class "card" :orientation "v" :space-evenly false
+    (label :class "card-label" :text "SYSTEM" :halign "start")
+    (system-bar :value cpu_usage :label "CPU" :color "teal" :detail "${cpu_temp}°")
+    (system-bar :value ram_usage :label "RAM" :color "mauve" :detail "${ram_used}/${ram_total}")
+    (system-bar :value disk_root_usage :label "ROOT" :color "peach" :detail disk_root_detail)
+    (system-bar :value disk_home_usage :label "HOME" :color "peach" :detail disk_home_detail)
+    (system-bar :value disk_lib_usage :label "LIB" :color "peach" :detail disk_lib_detail)
+    (box :class "uptime-row" :orientation "h" :space-evenly false
+      (label :class "stat-label" :text "uptime ")
+      (label :class "stat-value" :text uptime))))
+
+(defwidget media []
+  (box :class "card" :orientation "v" :space-evenly false
+    (label :class "card-label" :text "MEDIA" :halign "start")
+    (box :orientation "v" :space-evenly false :spacing 4
+      (label :class "media-title" :text media_title :halign "start" :limit-width 30)
+      (label :class "media-artist" :text media_artist :halign "start" :limit-width 30)
+      (label :class "media-player" :text media_player :halign "start"))))
+
+; ── Calendar event widget ──────────────────────────────────────
+
+(defwidget cal-event [summary time cal color]
+  (box :orientation "h" :space-evenly false :class "cal-event" :spacing 10
+    (box :class "cal-dot cal-dot-${color}" :width 4 :height 4)
+    (box :orientation "v" :space-evenly false :hexpand true
+      (label :class "cal-event-summary" :text summary :halign "start" :limit-width 36)
+      (box :orientation "h" :space-evenly false :spacing 8
+        (label :class "cal-event-time" :text time :halign "start")
+        (label :class "cal-event-cal" :text cal :halign "start")))))
+
+(defwidget cal-section [section]
+  (box :orientation "v" :space-evenly false
+    (label :class "cal-section-title" :text {section.label} :halign "start")
+    (for event in {section.events}
+      (cal-event
+        :summary {event.summary}
+        :time {event.time}
+        :cal {event.calendar}
+        :color {event.color}))))
+
+(defwidget agenda-list [sections]
+  (box :orientation "v" :space-evenly false
+    (for section in sections
+      (cal-section :section section))))
+
+
+; ── Desktop layout ─────────────────────────────────────────────
+
+(defwidget desktop []
+  (box :orientation "h" :space-evenly false :hexpand true :vexpand true
+    (box :orientation "v" :space-evenly false :spacing 12 :valign "start" :class "system-panel"
+      (system))
+    (box :orientation "v" :space-evenly false :spacing 12 :valign "center" :halign "center" :hexpand true
+      (clock)
+      (weather)
+      (box :orientation "h" :space-evenly false :spacing 12
+        (box :orientation "v" :space-evenly false :spacing 12 :class "desktop-col"
+          (toggl))
+        (box :orientation "v" :space-evenly false :spacing 12 :class "desktop-col"
+          (media))))
+    (box :orientation "v" :space-evenly false :spacing 12 :class "agenda-panel" :vexpand true
+      (box :class "card agenda-card" :orientation "v" :space-evenly false :vexpand true
+        (label :class "card-label" :text "MY CALENDAR" :halign "start")
+        (agenda-list :sections {cal_json != "" ? jq(cal_json, '.mine') : "[]"})
+        (box :visible {cal_json == "" || arraylength(jq(cal_json, '.mine')) == 0}
+          (label :class "cal-empty" :text "Nothing coming up" :halign "start")))
+      (box :class "card agenda-card" :orientation "v" :space-evenly false :vexpand true
+        (label :class "card-label" :text "PHILIP" :halign "start")
+        (agenda-list :sections {cal_json != "" ? jq(cal_json, '.philip') : "[]"})
+        (box :visible {cal_json == "" || arraylength(jq(cal_json, '.philip')) == 0}
+          (label :class "cal-empty" :text "Nothing coming up" :halign "start")))
+      (box :class "agenda-spacer" :height 16))))
+
+; ── Window (background layer on laptop) ───────────────────────
+
+(defwindow desktop
+  :monitor 0
+  :stacking "bg"
+  :focusable false
+  :exclusive false
+  :geometry (geometry :x "0%" :y "0%" :width "100%" :height "100%" :anchor "center")
+  (desktop))

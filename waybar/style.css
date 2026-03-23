@@ -1,0 +1,240 @@
+* {
+    font-family: "JetBrainsMono Nerd Font", "Font Awesome 6 Free", sans-serif;
+    font-size: 13px;
+    font-weight: bold;
+    min-height: 0;
+}
+
+window#waybar {
+    background: transparent;
+    color: #cdd6f4;
+}
+
+/* Base style: all modules get background, no rounding by default */
+#workspaces,
+#window,
+#clock,
+#backlight,
+#pulseaudio,
+#network,
+#tray,
+#cpu,
+#memory,
+#temperature,
+#battery,
+#custom-weather,
+#custom-toggl {
+    background-color: rgba(30, 30, 46, 0.8);
+    border-radius: 0;
+    padding: 2px 12px;
+    margin: 3px 0;
+}
+
+/* Spacers create gaps between groups */
+#custom-spacer-1,
+#custom-spacer-2,
+#custom-spacer-3,
+#custom-spacer-4,
+#custom-spacer-5 {
+    background: transparent;
+    padding: 0;
+    margin: 0 3px;
+    min-width: 0;
+}
+
+/* === Standalone pills (fully rounded) === */
+#workspaces,
+#window,
+#clock,
+#pulseaudio,
+#network,
+#backlight,
+#tray {
+    border-radius: 16px;
+    margin: 3px 3px;
+}
+
+/* === Info group: toggl (left) + weather (right) === */
+#custom-toggl {
+    border-radius: 16px 0 0 16px;
+}
+#custom-weather {
+    border-radius: 0 16px 16px 0;
+}
+
+/* === System group: cpu (left) + memory + temp + battery (right) === */
+#cpu {
+    border-radius: 16px 0 0 16px;
+}
+#battery {
+    border-radius: 0 16px 16px 0;
+}
+
+/* Workspaces */
+#workspaces {
+    padding: 2px 6px;
+}
+
+#workspaces button {
+    color: #585b70;
+    padding: 0 6px;
+    border-radius: 12px;
+    background: transparent;
+    transition: all 0.2s ease;
+}
+
+#workspaces button:hover {
+    color: #cdd6f4;
+    background: rgba(108, 112, 134, 0.3);
+    box-shadow: none;
+}
+
+#workspaces button.active {
+    color: #cba6f7;
+    background: rgba(203, 166, 247, 0.15);
+}
+
+#workspaces button.occupied {
+    color: #cdd6f4;
+}
+
+#workspaces button.empty {
+    color: #313244;
+}
+
+#workspaces button.urgent {
+    color: #f38ba8;
+    background: rgba(243, 139, 168, 0.15);
+}
+
+/* Media player */
+#custom-media {
+    background-color: rgba(30, 30, 46, 0.8);
+    border-radius: 16px;
+    padding: 2px 12px;
+    margin: 3px 3px;
+    min-width: 40px;
+    color: #1db954;
+}
+
+#custom-media.paused {
+    color: #6c7086;
+}
+
+#custom-media.stopped {
+    color: #45475a;
+}
+
+/* Window title */
+#window {
+    color: #a6adc8;
+    font-style: italic;
+}
+
+/* Clock */
+#clock {
+    color: #89b4fa;
+}
+
+/* Weather */
+#custom-weather {
+    color: #fab387;
+}
+
+/* Toggl */
+#custom-toggl {
+    color: #a6e3a1;
+}
+
+#custom-toggl.stopped {
+    color: #585b70;
+}
+
+/* System monitors */
+#cpu {
+    color: #94e2d5;
+}
+
+#memory {
+    color: #cba6f7;
+}
+
+#temperature {
+    color: #fab387;
+}
+
+#temperature.critical {
+    color: #f38ba8;
+}
+
+/* Hardware */
+#backlight {
+    color: #f9e2af;
+}
+
+#battery {
+    color: #a6e3a1;
+}
+
+#battery.warning {
+    color: #fab387;
+}
+
+#battery.critical:not(.charging) {
+    color: #f38ba8;
+    animation: blink 1s steps(12) infinite alternate;
+}
+
+#battery.charging {
+    color: #a6e3a1;
+}
+
+@keyframes blink {
+    to {
+        color: #f38ba8;
+        background-color: rgba(243, 139, 168, 0.15);
+    }
+}
+
+/* Network */
+#network {
+    color: #89b4fa;
+}
+
+#network.disconnected {
+    color: #f38ba8;
+}
+
+/* Audio */
+#pulseaudio {
+    color: #f9e2af;
+}
+
+#pulseaudio.muted {
+    color: #585b70;
+}
+
+/* Tray */
+#tray {
+    padding: 2px 8px;
+}
+
+#tray > .passive {
+    -gtk-icon-effect: dim;
+}
+
+#tray > .needs-attention {
+    -gtk-icon-effect: highlight;
+}
+
+/* Tooltip */
+tooltip {
+    background-color: rgba(30, 30, 46, 0.95);
+    border: 1px solid rgba(108, 112, 134, 0.3);
+    border-radius: 12px;
+    color: #cdd6f4;
+}
+
+tooltip label {
+    color: #cdd6f4;
+}
