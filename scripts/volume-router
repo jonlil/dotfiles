@@ -4,7 +4,7 @@
 # Usage: volume-router up|down|mute
 
 ACTION="$1"
-SMARTYCRANK="$HOME/Projects/jonlil/smartycrank/target/release/smartycrank"
+SMARTYCRANK="smartycrank"
 
 # Check if Jabra sink is actively running
 jabra_state=$(pw-cli info $(pw-cli ls Node 2>/dev/null | grep -B5 "Jabra" | head -1 | tr -dc '0-9') 2>/dev/null | grep "state:" | awk '{print $2}' | tr -d '"')

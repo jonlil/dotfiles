@@ -51,38 +51,20 @@
   `cat /tmp/eww-weather-parsed.json 2>/dev/null | jq -c '.daily // []' || echo "[]"`)
 
 ; ── System ─────────────────────────────────────────────────────
-(defpoll cpu_usage :interval "2s"
-  `awk '/^cpu /{printf "%.0f", ($2+$4)*100/($2+$4+$5)}' /proc/stat`)
-
-(defpoll ram_usage :interval "5s"
-  `free | awk '/Mem:/{printf "%.0f", $3/$2*100}'`)
-
-(defpoll ram_used :interval "5s"
-  `free -h | awk '/Mem:/{print $3}'`)
-
-(defpoll ram_total :interval "60s"
-  `free -h | awk '/Mem:/{print $2}'`)
-
-(defpoll disk_root_usage :interval "60s"
-  `df / | awk 'NR==2{print $5}' | tr -d '%'`)
-(defpoll disk_root_detail :interval "60s"
-  `df -h / | awk 'NR==2{printf "%s/%s", $3, $2}'`)
-
-(defpoll disk_home_usage :interval "60s"
-  `df /home | awk 'NR==2{print $5}' | tr -d '%'`)
-(defpoll disk_home_detail :interval "60s"
-  `df -h /home | awk 'NR==2{printf "%s/%s", $3, $2}'`)
-
-(defpoll disk_lib_usage :interval "60s"
-  `df /var/lib | awk 'NR==2{print $5}' | tr -d '%'`)
-(defpoll disk_lib_detail :interval "60s"
-  `df -h /var/lib | awk 'NR==2{printf "%s/%s", $3, $2}'`)
-
-(defpoll cpu_temp :interval "5s"
-  `sensors 2>/dev/null | awk '/Package id 0:/{gsub(/[^0-9.]/, "", $4); printf "%.0f", $4}'`)
+(defpoll disk_free :interval "60s"
+  `df -h / /home /var/lib 2>/dev/null | awk 'NR>1{split($6,a,"/"); name=(a[2]?a[2]:"/"); printf "%s %s  ", name, $4}' | sed 's/  $//'`)
 
 (defpoll uptime :interval "60s"
   `uptime -p | sed 's/up //'`)
+
+; ── Hockey ────────────────────────────────────────────────────
+(defpoll hockey_json :interval "600s"
+  `/home/jonas/dotfiles/scripts/eww-hockey`)
+
+; ── TV Guide ──────────────────────────────────────────────────
+(defpoll tv_json :interval "300s"
+  `/home/jonas/dotfiles/scripts/eww-tv`)
+(defvar tv_tab "hockey")
 
 ; ── Media (parsed fields) ──────────────────────────────────────
 (defpoll media_status :interval "3s"
@@ -164,23 +146,13 @@
             (label :class "weather-daily-emoji" :text {day.emoji})
             (label :class "weather-daily-temp" :text "${day.min}°/${day.max}°")))))))
 
-(defwidget system-bar [value label color detail]
-  (box :orientation "v" :space-evenly false :class "system-bar-item"
-    (box :orientation "h" :space-evenly false
-      (label :class "bar-label" :text label :halign "start" :hexpand true)
-      (label :class "bar-detail" :text detail)
-      (label :class "bar-value" :text " ${value}%"))
-    (progress :class "prog-${color}" :value {value ?: 0} :orientation "h")))
-
 (defwidget system []
   (box :class "card" :orientation "v" :space-evenly false
     (label :class "card-label" :text "SYSTEM" :halign "start")
-    (system-bar :value cpu_usage :label "CPU" :color "teal" :detail "${cpu_temp}°")
-    (system-bar :value ram_usage :label "RAM" :color "mauve" :detail "${ram_used}/${ram_total}")
-    (system-bar :value disk_root_usage :label "ROOT" :color "peach" :detail disk_root_detail)
-    (system-bar :value disk_home_usage :label "HOME" :color "peach" :detail disk_home_detail)
-    (system-bar :value disk_lib_usage :label "LIB" :color "peach" :detail disk_lib_detail)
-    (box :class "uptime-row" :orientation "h" :space-evenly false
+    (box :orientation "h" :space-evenly false :class "system-compact"
+      (label :class "stat-label" :text "disk " :halign "start")
+      (label :class "stat-value" :text disk_free))
+    (box :orientation "h" :space-evenly false :class "system-compact"
       (label :class "stat-label" :text "uptime ")
       (label :class "stat-value" :text uptime))))
 
@@ -219,12 +191,69 @@
       (cal-section :section section))))
 
 
+(defwidget replay-match [match]
+  (eventbox :onclick "smartycrank viska play ${match.id} &"
+    (box :orientation "h" :space-evenly false :class "replay-match" :spacing 8
+      (image :path {match.home_logo} :image-width 28 :image-height 28
+        :visible {match.home_logo != ""})
+      (label :class "replay-vs" :text "–")
+      (image :path {match.away_logo} :image-width 28 :image-height 28
+        :visible {match.away_logo != ""})
+      (label :class "replay-title" :text {match.title} :halign "start" :hexpand true :limit-width 22)
+      (label :class "replay-play" :text "▶"))))
+
+(defwidget replay-day [day]
+  (box :orientation "v" :space-evenly false :spacing 2
+    (label :class "replay-day-label" :text {day.label} :halign "start")
+    (for match in {day.matches}
+      (replay-match :match match))))
+
+(defwidget replays []
+  (box :class "card" :orientation "v" :space-evenly false
+    (label :class "card-label" :text "REPRISER" :halign "start")
+    (scroll :vscroll true :height 300
+      (box :orientation "v" :space-evenly false :spacing 6
+        (for day in {hockey_json != "" && hockey_json != "[]" ? hockey_json : "[]"}
+          (replay-day :day day))))
+    (box :visible {hockey_json == "" || hockey_json == "[]"}
+      (label :class "cal-empty" :text "Inga repriser" :halign "start"))))
+
+; ── TV Guide ───────────────────────────────────────────────────
+
+(defwidget tv-program [item]
+  (eventbox :onclick {item.channel_id != "" ? "smartycrank viska play ${item.channel_id} &" :
+                      item.asset_id != "" ? "smartycrank viska play ${item.asset_id} &" : ""}
+    (box :orientation "h" :space-evenly false :class {item.is_on_now ? "tv-program tv-program-now" : "tv-program"} :spacing 8
+      (image :class "tv-channel-logo" :path "/home/jonas/dotfiles/eww/icons/${item.channel_slug}.png"
+        :image-width 20 :image-height 20
+        :visible {item.channel_slug != ""})
+      (label :class "tv-time" :text {item.time} :halign "start")
+      (label :class {item.is_on_now ? "tv-title tv-title-now" : "tv-title"} :text {item.title} :halign "start" :hexpand true :limit-width 26)
+      (label :class "tv-type" :text {item.type == "LIVE" ? "LIVE" : item.type == "UPCOMING" ? item.channel : ""}
+        :visible {item.type == "LIVE" || item.type == "UPCOMING"})
+      (label :class "tv-play" :text "▶"))))
+
+(defwidget tv-guide []
+  (box :class "card" :orientation "v" :space-evenly false
+    (box :orientation "h" :space-evenly false :spacing 0 :class "tv-tabs"
+      (button :class {tv_tab == "nyheter" ? "tv-tab tv-tab-active" : "tv-tab"} :onclick "eww update tv_tab=nyheter" "Nyheter")
+      (button :class {tv_tab == "hockey" ? "tv-tab tv-tab-active" : "tv-tab"} :onclick "eww update tv_tab=hockey" "Hockey")
+      (button :class {tv_tab == "serier" ? "tv-tab tv-tab-active" : "tv-tab"} :onclick "eww update tv_tab=serier" "Serier"))
+    (scroll :vscroll true :height 320
+      (box :orientation "v" :space-evenly false :spacing 2
+        (for item in {tv_json != "" ? jq(tv_json, ".${tv_tab}") : "[]"}
+          (tv-program :item item))))
+    (box :visible {tv_json == ""}
+      (label :class "cal-empty" :text "Laddar..." :halign "start"))))
+
 ; ── Desktop layout ─────────────────────────────────────────────
 
 (defwidget desktop []
   (box :orientation "h" :space-evenly false :hexpand true :vexpand true
     (box :orientation "v" :space-evenly false :spacing 12 :valign "start" :class "system-panel"
-      (system))
+      (system)
+      (tv-guide)
+      (replays))
     (box :orientation "v" :space-evenly false :spacing 12 :valign "center" :halign "center" :hexpand true
       (clock)
       (weather)
@@ -249,7 +278,6 @@
 ; ── Window (background layer on laptop) ───────────────────────
 
 (defwindow desktop
-  :monitor 0
   :stacking "bg"
   :focusable false
   :exclusive false
