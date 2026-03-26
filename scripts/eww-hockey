@@ -1,0 +1,350 @@
+#!/usr/bin/python3
+"""Fetch SHL + Hockeyallsvenskan matches (past, live, upcoming) from TV4 Play API for eww widget."""
+
+import json
+import os
+import subprocess
+import time as _time
+from datetime import datetime, timedelta, timezone
+
+CACHE_FILE = "/tmp/eww-hockey.json"
+CACHE_MAX_AGE = 600  # 10 minutes
+
+ICON_DIR = os.path.realpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "eww", "icons", "teams"))
+ICON_MAX_AGE = 86400 * 30  # refresh logos monthly
+LOGO_CDN = "https://sportality.cdn.s8y.se/team-logos"
+
+# Map TV4 match title team names → logo file basenames
+TEAM_LOGOS = {
+    # SHL
+    "Brynäs": "bif1_bif", "Brynäs IF": "bif1_bif",
+    "Djurgården": "dif1_dif", "Djurgårdens IF": "dif1_dif",
+    "Färjestad": "fbk1_fbk", "Färjestad BK": "fbk1_fbk", "Färjestads BK": "fbk1_fbk",
+    "Frölunda": "fhc1_fhc", "Frölunda HC": "fhc1_fhc",
+    "HV71": "hv711_hv71",
+    "Leksand": "lif1_lif", "Leksands IF": "lif1_lif",
+    "Linköping": "lhc1_lhc", "Linköping HC": "lhc1_lhc", "Linköpings HC": "lhc1_lhc",
+    "Luleå": "lhf1_lhf", "Luleå HF": "lhf1_lhf",
+    "Malmö": "mif1_mif", "Malmö Redhawks": "mif1_mif",
+    "Örebro": "ohk1_ohk", "Örebro HK": "ohk1_ohk",
+    "Rögle": "rbk1_rbk", "Rögle BK": "rbk1_rbk",
+    "Skellefteå": "saik1_saik", "Skellefteå AIK": "saik1_saik",
+    "Timrå": "tik1_tik", "Timrå IK": "tik1_tik",
+    "Växjö": "vlh1_vlh", "Växjö Lakers": "vlh1_vlh",
+    # HA
+    "AIK": "aik1_aik",
+    "Almtuna": "ais1_ais", "Almtuna IS": "ais1_ais",
+    "BIK Karlskoga": "bik1_bik", "Karlskoga": "bik1_bik",
+    "Björklöven": "ifb1_ifb", "IF Björklöven": "ifb1_ifb",
+    "Oskarshamn": "iko1_iko", "IK Oskarshamn": "iko1_iko",
+    "Troja-Ljungby": "tro1_tro", "IF Troja-Ljungby": "tro1_tro", "Troja": "tro1_tro",
+    "Kalmar": "khc1_khc", "Kalmar HC": "khc1_khc",
+    "Mora": "mik1_mik", "Mora IK": "mik1_mik",
+    "MoDo": "modo1_modo", "MoDo Hockey": "modo1_modo",
+    "Nybro": "nyb1_nyb", "Nybro Vikings": "nyb1_nyb", "Nybro Vikings IF": "nyb1_nyb",
+    "Södertälje": "ssk1_ssk", "Södertälje SK": "ssk1_ssk",
+    "Vimmerby": "vim1_vim", "Vimmerby HC": "vim1_vim",
+    "Västerås": "vik1_vik", "Västerås IK": "vik1_vik",
+    "Östersund": "ost1_ost", "Östersunds IK": "ost1_ost",
+}
+
+
+def resolve_team_logos(title):
+    """Parse 'Home - Away' title and return (home_logo, away_logo) paths."""
+    # Strip prefixes like "Hockeylördag: "
+    clean = title.split(": ", 1)[-1] if ": " in title else title
+    parts = clean.split(" - ", 1)
+    if len(parts) != 2:
+        return "", ""
+    home = parts[0].strip()
+    away = parts[1].strip()
+    home_file = TEAM_LOGOS.get(home, "")
+    away_file = TEAM_LOGOS.get(away, "")
+    home_path = os.path.join(ICON_DIR, f"{home_file}.png") if home_file else ""
+    away_path = os.path.join(ICON_DIR, f"{away_file}.png") if away_file else ""
+    return home_path, away_path
+
+
+def download_logo(code):
+    """Download and convert a single team logo."""
+    svg_path = os.path.join(ICON_DIR, f"{code}.svg")
+    png_path = os.path.join(ICON_DIR, f"{code}.png")
+    try:
+        subprocess.run(
+            ["curl", "-sf", "--max-time", "5", f"{LOGO_CDN}/{code}.svg", "-o", svg_path],
+            timeout=10,
+        )
+        subprocess.run(
+            ["rsvg-convert", "-w", "48", "-h", "48", svg_path, "-o", png_path],
+            timeout=10,
+        )
+    except Exception:
+        pass
+
+
+def ensure_team_logos():
+    """Download missing team logos, refresh all monthly."""
+    os.makedirs(ICON_DIR, exist_ok=True)
+
+    # Always download missing logos
+    all_codes = set(TEAM_LOGOS.values())
+    for code in all_codes:
+        if not os.path.exists(os.path.join(ICON_DIR, f"{code}.png")):
+            download_logo(code)
+
+    # Refresh all logos monthly
+    marker = os.path.join(ICON_DIR, ".last-update")
+    try:
+        if _time.time() - os.stat(marker).st_mtime < ICON_MAX_AGE:
+            return
+    except OSError:
+        pass
+
+    for code in all_codes:
+        download_logo(code)
+
+    with open(marker, "w") as f:
+        f.write("")
+
+
+PANELS = {
+    "SHL": {
+        "upcoming": "1nUYcQT4xfZsnhV1KuSdgk",
+        "live": "44uGejpsaHlcPpwkxC58DQ",
+    },
+    "HA": {
+        "upcoming": "2oM4radomMgul986yAY8Lp",
+        "live": "bUqqSiWP2aCCadrx3UTpf",
+    },
+}
+
+GRAPHQL_URL = "https://client-gateway.tv4.a2d.tv/graphql"
+
+PANEL_QUERY = """
+query ($id: ID!) {
+  panel(id: $id) {
+    ... on SportEventPanel {
+      content(input: { limit: 10, offset: 0 }) {
+        items {
+          sportEvent {
+            id
+            title
+            round
+            liveEventEnd { isoString }
+            duration { seconds }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+TABLEAU_QUERY = """
+query SportEpg($input: TableauInput!) {
+  tableau(input: $input) {
+    ... on TableauSportItem {
+      content {
+        id
+        title
+        league
+        round
+        playableFrom { isoString }
+        liveEventEnd { isoString }
+        duration { seconds }
+      }
+    }
+  }
+}
+"""
+
+
+def graphql_request(query, variables):
+    try:
+        body = json.dumps({"query": query, "variables": variables})
+        result = subprocess.run(
+            ["curl", "-sf", "--max-time", "10", GRAPHQL_URL,
+             "-H", "Content-Type: application/json",
+             "-H", "Client-Name: tv4-web",
+             "-H", "Client-Version: 5.2.0",
+             "-d", body],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return json.loads(result.stdout)
+    except Exception:
+        pass
+    return None
+
+
+def fetch_panel(panel_id):
+    data = graphql_request(PANEL_QUERY, {"id": panel_id})
+    if not data:
+        return []
+    items = data.get("data", {}).get("panel", {}).get("content", {}).get("items", [])
+    return [i["sportEvent"] for i in items if i.get("sportEvent")]
+
+
+def fetch_past_matches():
+    """Fetch played matches from the last 7 days using the tableau query (max 4 days per request)."""
+    now = datetime.now(timezone.utc)
+    events = []
+
+    # Split into 4-day chunks to stay under the 5-day limit
+    for chunk_start in range(0, 7, 4):
+        chunk_end = min(chunk_start + 4, 7)
+        from_ts = int((now - timedelta(days=chunk_end)).timestamp() * 1000)
+        to_ts = int((now - timedelta(days=chunk_start)).timestamp() * 1000)
+
+        variables = {
+            "input": {
+                "from": from_ts,
+                "to": to_ts,
+                "types": ["SPORT_EVENT"],
+                "sportFilter": {"leagues": ["SHL", "HockeyAllsvenskan"]},
+            }
+        }
+        data = graphql_request(TABLEAU_QUERY, variables)
+        if not data:
+            continue
+
+        items = data.get("data", {}).get("tableau", [])
+        for item in items:
+            content = item.get("content")
+            if content:
+                events.append(content)
+
+    return events
+
+
+def calc_start(end_iso, duration_secs):
+    """Calculate broadcast start from end time and duration."""
+    try:
+        end = datetime.fromisoformat(end_iso.replace("Z", "+00:00"))
+        start = end - timedelta(seconds=duration_secs)
+        return start.astimezone()
+    except Exception:
+        return None
+
+
+def parse_iso(iso_str):
+    try:
+        return datetime.fromisoformat(iso_str.replace("Z", "+00:00")).astimezone()
+    except Exception:
+        return None
+
+
+def format_time(dt):
+    now = datetime.now().astimezone()
+    if dt.date() == now.date():
+        return f"Idag {dt.strftime('%H:%M')}"
+    tomorrow = now.date() + timedelta(days=1)
+    if dt.date() == tomorrow:
+        return f"Imorgon {dt.strftime('%H:%M')}"
+    yesterday = now.date() - timedelta(days=1)
+    if dt.date() == yesterday:
+        return f"Igår {dt.strftime('%H:%M')}"
+    return dt.strftime("%a %d/%m %H:%M")
+
+
+def is_match_ended(end_iso):
+    """Check if a match has ended (liveEventEnd is in the past)."""
+    if not end_iso:
+        return False
+    end_dt = parse_iso(end_iso)
+    if not end_dt:
+        return False
+    return end_dt < datetime.now().astimezone()
+
+
+def league_short(league_str):
+    """Map API league names to short display names."""
+    mapping = {"SHL": "SHL", "HockeyAllsvenskan": "HA", "Liiga": "Liiga"}
+    return mapping.get(league_str, league_str)
+
+
+WEEKDAYS_SV = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag", "Lördag", "Söndag"]
+
+
+def day_label(dt):
+    """Human-friendly day label in Swedish."""
+    now = datetime.now().astimezone()
+    if dt.date() == now.date():
+        return "Idag"
+    yesterday = now.date() - timedelta(days=1)
+    if dt.date() == yesterday:
+        return "Igår"
+    return f"{WEEKDAYS_SV[dt.weekday()]} {dt.strftime('%d/%m')}"
+
+
+def main():
+    ensure_team_logos()
+
+    # Check cache
+    try:
+        st = os.stat(CACHE_FILE)
+        if _time.time() - st.st_mtime < CACHE_MAX_AGE:
+            with open(CACHE_FILE) as f:
+                print(f.read(), end="")
+                return
+    except (OSError, ValueError):
+        pass
+
+    seen_ids = set()
+
+    # Fetch past matches from tableau, grouped by day (most recent first)
+    past_events = fetch_past_matches()
+    played = []
+    for ev in past_events:
+        asset_id = ev.get("id", "")
+        if asset_id in seen_ids:
+            continue
+        seen_ids.add(asset_id)
+
+        end_iso = ev.get("liveEventEnd", {}).get("isoString", "")
+        if not is_match_ended(end_iso):
+            continue
+
+        start_iso = ev.get("playableFrom", {}).get("isoString", "")
+        start_dt = parse_iso(start_iso) if start_iso else None
+        league = league_short(ev.get("league", ""))
+
+        played.append({
+            "title": ev.get("title", ""),
+            "league": league,
+            "id": asset_id,
+            "date": start_dt,
+        })
+
+    played.sort(key=lambda m: m["date"].isoformat() if m["date"] else "", reverse=True)
+
+    # Group by day
+    days = []
+    current_label = None
+    current_matches = []
+    for m in played:
+        label = day_label(m["date"]) if m["date"] else "Okänt"
+        if label != current_label:
+            if current_matches:
+                days.append({"label": current_label, "matches": current_matches})
+            current_label = label
+            current_matches = []
+        home_logo, away_logo = resolve_team_logos(m["title"])
+        current_matches.append({
+            "title": m["title"],
+            "league": m["league"],
+            "id": m["id"],
+            "home_logo": home_logo,
+            "away_logo": away_logo,
+        })
+    if current_matches:
+        days.append({"label": current_label, "matches": current_matches})
+
+    output = json.dumps(days)
+    with open(CACHE_FILE, "w") as f:
+        f.write(output)
+    print(output)
+
+
+if __name__ == "__main__":
+    main()

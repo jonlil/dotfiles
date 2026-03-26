@@ -1,0 +1,353 @@
+#!/usr/bin/python3
+"""Fetch personalized TV guide from TV4 Play API for eww widget."""
+
+import json
+import os
+import subprocess
+import time as _time
+from datetime import datetime, timedelta, timezone
+
+CACHE_FILE = "/tmp/eww-tv.json"
+CACHE_MAX_AGE = 300  # 5 minutes
+
+GRAPHQL_URL = "https://client-gateway.tv4.a2d.tv/graphql"
+
+# Channel IDs
+CHANNELS = {
+    "tv4": "89415a06d55534db08c9",
+    "tv4-hockey": "2f3f0c5d17fc6abd53ba",
+    "tv4-sportkanalen": "e5e5d570e221f5de9e3a",
+    "sjuan": "3bac25bcd34c7e149f56",
+    "tv4-fakta": "e8bd422c976731796f7f",
+    "tv12": "1823232ee5c6c868154d",
+}
+
+# Tab definitions: which channels feed each tab
+TABS = {
+    "nyheter": {
+        "channels": ["tv4"],
+        "filter": ["Nyhetsmorgon", "Nyhetsdagen", "Efter fem", "TV4 Nyheterna", "TV4 Vädret", "Sportnytt", "Ekonominyheterna"],
+    },
+    "hockey": {
+        "channels": ["tv4-hockey", "tv4-sportkanalen"],
+        "filter": None,  # show all
+    },
+    "serier": {
+        "channels": ["tv4", "sjuan", "tv4-fakta", "tv12"],
+        "filter": None,  # show all non-news
+    },
+}
+
+ICON_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "eww", "icons")
+ICON_MAX_AGE = 86400 * 7  # refresh logos weekly
+
+EPG_QUERY = """
+query {
+  channels {
+    slug
+    title
+    images { logo { source } }
+    epg {
+      title
+      start
+      end
+      type
+      media {
+        ... on EpgItemEpisodeReference {
+          episode { id title }
+        }
+      }
+    }
+  }
+}
+"""
+
+TABLEAU_QUERY = """
+query SportEpg($input: TableauInput!) {
+  tableau(input: $input) {
+    ... on TableauSportItem {
+      content {
+        id
+        title
+        league
+        round
+        playableFrom { isoString }
+        liveEventEnd { isoString }
+      }
+    }
+  }
+}
+"""
+
+NEWS_KEYWORDS = {"nyhetsmorgon", "nyhetsdagen", "efter fem", "tv4 nyheterna",
+                 "tv4 vädret", "sportnytt", "ekonominyheterna", "väder",
+                 "nyheter", "morgonstudion"}
+
+
+def graphql_request(query, variables=None):
+    try:
+        payload = {"query": query}
+        if variables:
+            payload["variables"] = variables
+        body = json.dumps(payload)
+        result = subprocess.run(
+            ["curl", "-sf", "--max-time", "10", GRAPHQL_URL,
+             "-H", "Content-Type: application/json",
+             "-H", "Client-Name: tv4-web",
+             "-H", "Client-Version: 5.2.0",
+             "-d", body],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return json.loads(result.stdout)
+    except Exception:
+        pass
+    return None
+
+
+def parse_iso(iso_str):
+    try:
+        return datetime.fromisoformat(iso_str.replace("Z", "+00:00")).astimezone()
+    except Exception:
+        return None
+
+
+def format_time(dt):
+    return dt.strftime("%H:%M") if dt else ""
+
+
+def is_news(title):
+    return title.lower().strip() in NEWS_KEYWORDS or any(kw in title.lower() for kw in NEWS_KEYWORDS)
+
+
+def update_channel_logo(slug, logo_url):
+    """Download channel logo if missing or stale."""
+    if not logo_url:
+        return
+    os.makedirs(ICON_DIR, exist_ok=True)
+    path = os.path.join(ICON_DIR, f"{slug}.png")
+    try:
+        st = os.stat(path)
+        if _time.time() - st.st_mtime < ICON_MAX_AGE:
+            return
+    except OSError:
+        pass
+    try:
+        subprocess.run(
+            ["curl", "-sf", "--max-time", "5", logo_url, "-o", path],
+            timeout=10,
+        )
+    except Exception:
+        pass
+
+
+def fetch_epg():
+    data = graphql_request(EPG_QUERY)
+    if not data:
+        return {}
+    channels = {}
+    for ch in data.get("data", {}).get("channels", []):
+        slug = ch["slug"]
+        channels[slug] = ch
+        # Update logo for channels we care about
+        if slug in CHANNELS:
+            logo_url = (ch.get("images") or {}).get("logo", {}).get("source", "")
+            update_channel_logo(slug, logo_url)
+    return channels
+
+
+def fetch_upcoming_matches():
+    now = datetime.now(timezone.utc)
+    from_ts = int(now.timestamp() * 1000)
+    to_ts = int((now + timedelta(days=4)).timestamp() * 1000)
+    variables = {
+        "input": {
+            "from": from_ts,
+            "to": to_ts,
+            "types": ["SPORT_EVENT"],
+            "sportFilter": {"leagues": ["SHL", "HockeyAllsvenskan"]},
+        }
+    }
+    data = graphql_request(TABLEAU_QUERY, variables)
+    if not data:
+        return []
+    items = data.get("data", {}).get("tableau", [])
+    return [item["content"] for item in items if item.get("content")]
+
+
+def build_hockey_tab(channels, upcoming_matches):
+    """Build hockey tab: channel EPG + upcoming matches."""
+    now = datetime.now().astimezone()
+    items = []
+
+    # EPG from hockey channels
+    for slug in TABS["hockey"]["channels"]:
+        ch = channels.get(slug, {})
+        for ep in ch.get("epg", []):
+            start = parse_iso(ep.get("start", ""))
+            end = parse_iso(ep.get("end", ""))
+            if not start:
+                continue
+            items.append({
+                "title": ep.get("title", ""),
+                "time": format_time(start),
+                "end_time": format_time(end),
+                "type": ep.get("type", ""),
+                "channel": ch.get("title", slug),
+                "channel_slug": slug,
+                "playable": True,
+                "channel_id": CHANNELS.get(slug, ""),
+                "asset_id": "",
+                "is_on_now": start <= now <= end if end else False,
+                "sort_key": start.isoformat(),
+            })
+
+    # Upcoming matches from tableau (not already in EPG)
+    epg_titles = {item["title"].lower() for item in items}
+    for match in upcoming_matches:
+        start = parse_iso(match.get("playableFrom", {}).get("isoString", ""))
+        if not start:
+            continue
+        title = match.get("title", "")
+        if title.lower() in epg_titles:
+            continue
+        league = {"SHL": "SHL", "HockeyAllsvenskan": "HA"}.get(
+            match.get("league", ""), match.get("league", ""))
+        items.append({
+            "title": title,
+            "time": format_time(start) if start.date() == now.date() else start.strftime("%a %H:%M"),
+            "end_time": "",
+            "type": "UPCOMING",
+            "channel": league,
+            "channel_slug": "",
+            "playable": True,
+            "channel_id": "",
+            "asset_id": match.get("id", ""),
+            "is_on_now": False,
+            "sort_key": start.isoformat(),
+        })
+
+    items.sort(key=lambda x: x["sort_key"])
+    for item in items:
+        del item["sort_key"]
+    return items
+
+
+def build_news_tab(channels):
+    """Build news tab: news programs from TV4."""
+    now = datetime.now().astimezone()
+    items = []
+
+    ch = channels.get("tv4", {})
+    for ep in ch.get("epg", []):
+        start = parse_iso(ep.get("start", ""))
+        end = parse_iso(ep.get("end", ""))
+        if not start:
+            continue
+        items.append({
+            "title": ep.get("title", ""),
+            "time": format_time(start),
+            "end_time": format_time(end),
+            "type": ep.get("type", ""),
+            "channel": "TV4",
+            "channel_slug": "tv4",
+            "playable": True,
+            "channel_id": CHANNELS["tv4"],
+            "asset_id": "",
+            "is_on_now": start <= now <= end if end else False,
+            "sort_key": start.isoformat(),
+        })
+
+    items.sort(key=lambda x: x["sort_key"])
+    for item in items:
+        del item["sort_key"]
+    return items
+
+
+def build_serier_tab(channels):
+    """Build serier tab: non-news entertainment from main channels."""
+    now = datetime.now().astimezone()
+    items = []
+
+    for slug in TABS["serier"]["channels"]:
+        ch = channels.get(slug, {})
+        for ep in ch.get("epg", []):
+            title = ep.get("title", "")
+            if is_news(title):
+                continue
+            start = parse_iso(ep.get("start", ""))
+            end = parse_iso(ep.get("end", ""))
+            if not start:
+                continue
+            items.append({
+                "title": title,
+                "time": format_time(start),
+                "end_time": format_time(end),
+                "type": ep.get("type", ""),
+                "channel": ch.get("title", slug),
+                "channel_slug": slug,
+                "playable": True,
+                "channel_id": CHANNELS.get(slug, ""),
+                "asset_id": "",
+                "is_on_now": start <= now <= end if end else False,
+                "sort_key": start.isoformat(),
+            })
+
+    items.sort(key=lambda x: x["sort_key"])
+    for item in items:
+        del item["sort_key"]
+    return items
+
+
+def trim_tab(items, max_items):
+    """Keep current + future items, drop already-ended programs."""
+    # Keep items that are on now or haven't ended yet
+    # For items without end_time (upcoming matches), always keep
+    now = datetime.now().astimezone()
+    kept = []
+    for item in items:
+        if item["is_on_now"]:
+            kept.append(item)
+        elif item["end_time"] == "":
+            kept.append(item)
+        else:
+            # Parse end_time (HH:MM today) to check if it passed
+            try:
+                end_h, end_m = map(int, item["end_time"].split(":"))
+                end_dt = now.replace(hour=end_h, minute=end_m, second=0)
+                if end_dt > now:
+                    kept.append(item)
+            except (ValueError, AttributeError):
+                kept.append(item)
+    return kept[:max_items]
+
+
+def main():
+    # Check cache
+    try:
+        st = os.stat(CACHE_FILE)
+        if _time.time() - st.st_mtime < CACHE_MAX_AGE:
+            with open(CACHE_FILE) as f:
+                print(f.read(), end="")
+                return
+    except (OSError, ValueError):
+        pass
+
+    channels = fetch_epg()
+    upcoming = fetch_upcoming_matches()
+
+    MAX_ITEMS = 12
+
+    output = json.dumps({
+        "nyheter": trim_tab(build_news_tab(channels), MAX_ITEMS),
+        "hockey": trim_tab(build_hockey_tab(channels, upcoming), MAX_ITEMS),
+        "serier": trim_tab(build_serier_tab(channels), MAX_ITEMS),
+    })
+
+    with open(CACHE_FILE, "w") as f:
+        f.write(output)
+    print(output)
+
+
+if __name__ == "__main__":
+    main()

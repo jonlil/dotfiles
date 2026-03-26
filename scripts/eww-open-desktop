@@ -1,0 +1,10 @@
+#!/bin/sh
+# Open eww desktop widget on MSI monitor if connected, otherwise laptop screen.
+eww close desktop 2>/dev/null
+
+HAS_MSI=$(hyprctl monitors -j | jq '[.[] | .description] | any(test("MSI MAG271CQR"))')
+if [ "$HAS_MSI" = "true" ]; then
+  eww open desktop --screen "MSI MAG271CQR"
+else
+  eww open desktop --screen 0
+fi

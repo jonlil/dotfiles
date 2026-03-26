@@ -1,6 +1,6 @@
 #!/bin/sh
 # Fetch current Toggl time entry + weekly/monthly hours for waybar
-API_TOKEN="${TOGGL_API_TOKEN}"
+API_TOKEN="${TOGGL_API_TOKEN:-$(secret-tool lookup service toggl key api-token 2>/dev/null)}"
 WS_ID="2994868"
 CACHE_DIR="${XDG_RUNTIME_DIR:-/tmp}/toggl-cache"
 CACHE_MAX_AGE=300  # 5 minutes

@@ -1,3 +1,4 @@
-.claude/memory/
+.claude/
+eww/icons/
 shell/.zshenv
 ssh/config.d/work

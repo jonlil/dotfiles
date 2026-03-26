@@ -1,0 +1,11 @@
+#!/bin/bash
+# Watch for monitor connect/disconnect events and reopen eww on the right screen.
+SOCKET="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
+while read -r line; do
+  case "$line" in
+    monitoradded*|monitorremoved*)
+      sleep 1
+      ~/dotfiles/scripts/eww-open-desktop
+      ;;
+  esac
+done < <(exec cat "$SOCKET")

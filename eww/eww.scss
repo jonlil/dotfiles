@@ -260,6 +260,155 @@ progress > trough {
   border-radius: 3px;
 }
 
+// ── TV Guide ─────────────────────────────────────────────────
+.tv-tabs {
+  margin-bottom: 8px;
+}
+
+.tv-tab {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 13px;
+  font-weight: normal;
+  color: $overlay0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  text-shadow: none;
+  outline: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  &:hover { color: $text; }
+}
+
+.tv-tab-active {
+  color: $text;
+  background-color: rgba($surface0, 0.6);
+  font-weight: bold;
+  text-shadow: none;
+}
+
+.tv-program {
+  padding: 3px 6px;
+  border-radius: 4px;
+  &:hover { background-color: rgba($surface0, 0.4); }
+}
+
+.tv-program-now {
+  background-color: rgba($surface0, 0.4);
+}
+
+.tv-time {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 11px;
+  color: $overlay0;
+  min-width: 38px;
+}
+
+.tv-title {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 12px;
+  color: $subtext0;
+}
+
+.tv-title-now {
+  color: $text;
+}
+
+.tv-type {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 9px;
+  font-weight: bold;
+  color: $base;
+  background-color: $red;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.tv-channel-logo {
+  min-width: 20px;
+  border-radius: 3px;
+}
+
+.tv-play {
+  font-size: 10px;
+  color: $overlay0;
+  min-width: 16px;
+}
+
+.tv-program:hover .tv-play {
+  color: $blue;
+}
+
+// ── Hockey / Replays ──────────────────────────────────────────
+.hockey-league {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 9px;
+  font-weight: bold;
+  color: $base;
+  padding: 2px 6px;
+  border-radius: 4px;
+  min-width: 28px;
+}
+
+.hockey-league-SHL { background-color: $peach; }
+.hockey-league-HA { background-color: $blue; }
+
+.replay-match {
+  padding: 6px 8px;
+  border-radius: 6px;
+  &:hover { background-color: rgba($surface0, 0.4); }
+}
+
+.replay-title {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 12px;
+  color: $text;
+}
+
+.replay-vs {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 10px;
+  color: $overlay0;
+}
+
+.replay-play {
+  font-size: 10px;
+  color: $overlay0;
+  min-width: 16px;
+  transition: color 150ms ease;
+}
+
+.replay-match:hover .replay-play {
+  color: $green;
+}
+
+.replay-day-label {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 10px;
+  font-weight: bold;
+  color: $overlay0;
+  padding: 2px 0;
+}
+
+.hockey-title {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 13px;
+  color: $text;
+}
+
+.hockey-round {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 10px;
+  color: $overlay0;
+}
+
+.hockey-time {
+  font-family: "JetBrainsMono Nerd Font", monospace;
+  font-size: 11px;
+  color: $subtext0;
+}
+
+
 // ── Media ─────────────────────────────────────────────────────
 .media-title {
   font-family: "JetBrainsMono Nerd Font", monospace;
