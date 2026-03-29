@@ -1,0 +1,16 @@
+Match host unifi-controller exec "ip neigh show 192.168.1.1 2>/dev/null | grep -q 'ac:8b:a9:a8:53:bd'"
+  HostName 192.168.1.49
+  Port 22
+  User pi
+  ForwardAgent yes
+
+Match host viska,viska.lan exec "ip neigh show 192.168.1.1 2>/dev/null | grep -q 'ac:8b:a9:a8:53:bd'"
+  HostName 192.168.1.180
+  User pi
+  ForwardAgent yes
+
+Host viska viska.lan
+  HostName 192.168.1.180
+  User pi
+  ProxyJump unifi-controller
+  ForwardAgent yes
