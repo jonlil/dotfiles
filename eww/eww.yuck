@@ -278,6 +278,7 @@
 ; ── Window (background layer on laptop) ───────────────────────
 
 (defwindow desktop
+  :monitor 0
   :stacking "bg"
   :focusable false
   :exclusive false

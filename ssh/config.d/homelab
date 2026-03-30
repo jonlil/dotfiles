@@ -1,6 +1,13 @@
-Match host unifi-controller exec "ip neigh show 192.168.1.1 2>/dev/null | grep -q 'ac:8b:a9:a8:53:bd'"
+# Hemma — direkt via LAN
+Match host unifi-controller,jump.kodgrottan.app exec "ip neigh show 192.168.1.1 2>/dev/null | grep -q 'ac:8b:a9:a8:53:bd'"
   HostName 192.168.1.49
   Port 22
+  User pi
+  ForwardAgent yes
+
+# Borta — via Cloudflare Tunnel
+Host unifi-controller jump.kodgrottan.app
+  ProxyCommand cloudflared access ssh --hostname jump.kodgrottan.app
   User pi
   ForwardAgent yes
 
