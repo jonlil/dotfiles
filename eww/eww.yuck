@@ -192,7 +192,7 @@
 
 
 (defwidget replay-match [match]
-  (eventbox :onclick "smartycrank viska play ${match.id} &"
+  (eventbox :onclick "viska play tv4play/${match.id} &"
     (box :orientation "h" :space-evenly false :class "replay-match" :spacing 8
       (image :path {match.home_logo} :image-width 28 :image-height 28
         :visible {match.home_logo != ""})
@@ -221,8 +221,8 @@
 ; ── TV Guide ───────────────────────────────────────────────────
 
 (defwidget tv-program [item]
-  (eventbox :onclick {item.channel_id != "" ? "smartycrank viska play ${item.channel_id} &" :
-                      item.asset_id != "" ? "smartycrank viska play ${item.asset_id} &" : ""}
+  (eventbox :onclick {item.channel_id != "" ? "viska play tv4play/${item.channel_id} &" :
+                      item.asset_id != "" ? "viska play tv4play/${item.asset_id} &" : ""}
     (box :orientation "h" :space-evenly false :class {item.is_on_now ? "tv-program tv-program-now" : "tv-program"} :spacing 8
       (image :class "tv-channel-logo" :path "/home/jonas/dotfiles/eww/icons/${item.channel_slug}.png"
         :image-width 20 :image-height 20
