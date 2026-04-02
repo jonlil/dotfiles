@@ -1,0 +1,24 @@
+[edge]
+url = "http://viska.lan:3001"
+
+[tvs.living_room]
+host = "192.168.1.110"
+mac = "C0:48:E6:98:22:B8"
+
+[tvs.bedroom]
+host = "192.168.1.207"
+mac = "F4:DD:06:B8:35:40"
+wake = "smartthings"
+smartthings_device_id = "14518c28-97b5-3e8e-8323-af0bb7da02fe"
+
+[tvs.philips_room]
+host = "192.168.1.101"
+mac = "1C:86:9A:7A:33:48"
+wake = "wol"
+smartthings_device_id = "aeedaaef-e145-039c-978d-f32bc5a45ecb"
+
+[default]
+tv = "living_room"
+
+[spotify]
+tv_device_name = "Samsung TV QE55Q8DNA"

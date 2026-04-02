@@ -46,6 +46,9 @@ for script in "$DOTFILES/scripts/"*; do
     link "$script" "$HOME/.local/bin/$name"
 done
 
+# Viska
+link "$DOTFILES/viska/config.toml" "$HOME/.config/viska/config.toml"
+
 # K9s
 link "$DOTFILES/k9s/config.yaml" "$HOME/.config/k9s/config.yaml"
 link "$DOTFILES/k9s/aliases.yaml" "$HOME/.config/k9s/aliases.yaml"
