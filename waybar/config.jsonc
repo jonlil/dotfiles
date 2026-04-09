@@ -77,8 +77,9 @@
     "custom/toggl": {
         "exec": "~/.local/bin/waybar-toggl",
         "return-type": "json",
-        "interval": 120,
-        "tooltip": true
+        "restart-interval": 5,
+        "tooltip": true,
+        "on-click": "~/.local/bin/toggl-fuzzel"
     },
     "cpu": {
         "format": "🖥️ {usage}%",

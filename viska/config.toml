@@ -1,8 +1,8 @@
 [edge]
-url = "http://viska.lan:3001"
+url = "http://192.168.1.180:3000"
 
 [tvs.living_room]
-host = "192.168.1.110"
+host = "192.168.1.44"
 mac = "C0:48:E6:98:22:B8"
 
 [tvs.bedroom]

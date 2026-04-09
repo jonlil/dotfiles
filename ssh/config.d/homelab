@@ -3,6 +3,7 @@ Match host unifi-controller,jump.kodgrottan.app exec "ip neigh show 192.168.1.1 
   HostName 192.168.1.49
   Port 22
   User pi
+  ProxyCommand none
   ForwardAgent yes
 
 # Borta — via Cloudflare Tunnel
@@ -14,6 +15,7 @@ Host unifi-controller jump.kodgrottan.app
 Match host viska,viska.lan exec "ip neigh show 192.168.1.1 2>/dev/null | grep -q 'ac:8b:a9:a8:53:bd'"
   HostName 192.168.1.180
   User pi
+  ProxyJump none
   ForwardAgent yes
 
 Host viska viska.lan
@@ -21,3 +23,9 @@ Host viska viska.lan
   User pi
   ProxyJump unifi-controller
   ForwardAgent yes
+
+Host edgerouter
+  HostName 192.168.1.1
+  User ubnt
+  IdentityFile ~/.ssh/id_ed25519
+  # PQCForward no  # not supported by this OpenSSH version

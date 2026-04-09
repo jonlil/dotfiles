@@ -1,0 +1,41 @@
+pkgname=viska-cli-git
+_pkgname=viska-cli
+pkgver=0.3.0.r24.09b176b
+pkgrel=1
+pkgdesc='Viska — control your TV from the command line'
+arch=('x86_64')
+url='https://github.com/viska-ab/viska-cli'
+license=('MIT')
+depends=('gcc-libs' 'openssl' 'dbus')
+makedepends=('cargo' 'git' 'nasm')
+provides=('viska')
+conflicts=('viska' 'smartycrank')
+source=("git+ssh://git@github.com/viska-ab/viska-cli.git")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd "$_pkgname"
+    printf '%s.r%s.%s' \
+        "$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')" \
+        "$(git rev-list --count HEAD)" \
+        "$(git rev-parse --short HEAD)"
+}
+
+prepare() {
+    cd "$_pkgname"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo fetch --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+    cd "$_pkgname"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR=target
+    export RUSTFLAGS="-C linker=gcc"
+    cargo build --release
+}
+
+package() {
+    cd "$_pkgname"
+    install -Dm755 "target/release/viska" "$pkgdir/usr/bin/viska"
+}

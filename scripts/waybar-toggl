@@ -1,113 +1,65 @@
 #!/bin/sh
-# Fetch current Toggl time entry + weekly/monthly hours for waybar
-API_TOKEN="${TOGGL_API_TOKEN:-$(secret-tool lookup service toggl key api-token 2>/dev/null)}"
-WS_ID="2994868"
-CACHE_DIR="${XDG_RUNTIME_DIR:-/tmp}/toggl-cache"
-CACHE_MAX_AGE=300  # 5 minutes
+# Waybar module for Toggl Track via toggl-track-track daemon socket
+SOCKET="${XDG_RUNTIME_DIR}/toggl-track-track.sock"
 
-mkdir -p "$CACHE_DIR"
+# Wait for socket to appear
+while [ ! -S "$SOCKET" ]; do
+    printf '{"text": "⏸️ --", "tooltip": "Väntar på toggl-track-track...", "class": "stopped"}\n'
+    sleep 5
+done
 
-# Current timer (always fresh - 1 API call)
-data=$(curl -sf -u "${API_TOKEN}:api_token" \
-    "https://api.track.toggl.com/api/v9/me/time_entries/current" 2>/dev/null)
+# State
+entry_json="null"
+day="0:00"
+week="0:00"
+month="0:00"
 
-now_epoch=$(date +%s)
-today=$(date +%Y-%m-%d)
+emit_waybar() {
+    if [ "$entry_json" = "null" ]; then
+        printf '{"text": "⏸️ %s/%s/%s", "tooltip": "Ingen timer igång\\nIdag: %s | Vecka: %s | Månad: %s", "class": "stopped"}\n' \
+            "$day" "$week" "$month" "$day" "$week" "$month"
+    else
+        desc=$(echo "$entry_json" | jq -r '.description // ""')
+        duration=$(echo "$entry_json" | jq -r '.duration.formatted // "00:00:00"')
+        project=$(echo "$entry_json" | jq -r '.project.name // empty')
 
-# Helper: fetch reports summary with caching
-fetch_report_cached() {
-    cache_file="$CACHE_DIR/$1"
-    start_date="$2"
-    end_date="$3"
-    if [ -f "$cache_file" ]; then
-        age=$((now_epoch - $(stat -c %Y "$cache_file")))
-        if [ "$age" -lt "$CACHE_MAX_AGE" ]; then
-            cat "$cache_file"
-            return
+        if [ -n "$desc" ] && [ ${#desc} -gt 20 ]; then
+            short_desc="$(echo "$desc" | cut -c1-20)..."
+        elif [ -n "$desc" ]; then
+            short_desc="$desc"
+        else
+            short_desc="(no desc)"
         fi
-    fi
-    result=$(curl -sf -u "${API_TOKEN}:api_token" \
-        -H "Content-Type: application/json" \
-        -d "{\"start_date\":\"${start_date}\",\"end_date\":\"${end_date}\"}" \
-        "https://api.track.toggl.com/reports/api/v3/workspace/${WS_ID}/summary/time_entries" 2>/dev/null)
-    if [ -n "$result" ]; then
-        echo "$result" > "$cache_file"
-        echo "$result"
-    elif [ -f "$cache_file" ]; then
-        cat "$cache_file"
+
+        if [ -n "$project" ]; then
+            tooltip="${project}: ${desc}\\nTimer: ${duration}\\nIdag: ${day} | Vecka: ${week} | Månad: ${month}"
+        else
+            tooltip="${desc}\\nTimer: ${duration}\\nIdag: ${day} | Vecka: ${week} | Månad: ${month}"
+        fi
+
+        printf '{"text": "⏱️ %s %s | %s/%s/%s", "tooltip": "%s", "class": "running"}\n' \
+            "$short_desc" "$duration" "$day" "$week" "$month" "$tooltip"
     fi
 }
 
-# Sum seconds from reports API response
-sum_seconds() {
-    echo "$1" | jq '[.groups[]?.sub_groups[]?.seconds // 0] | add // 0' 2>/dev/null || echo "0"
-}
-
-dow=$(date +%u)
-week_start=$(date -d "-$((dow - 1)) days" +%Y-%m-%d)
-month_start=$(date +%Y-%m-01)
-
-today_report=$(fetch_report_cached "today_report" "$today" "$today")
-week_report=$(fetch_report_cached "week_report" "$week_start" "$today")
-month_report=$(fetch_report_cached "month_report" "$month_start" "$today")
-
-today_s=$(sum_seconds "$today_report")
-week_s=$(sum_seconds "$week_report")
-month_s=$(sum_seconds "$month_report")
-
-# Add running entry's elapsed time to totals (Reports API excludes it)
-running_extra=0
-if [ -n "$data" ] && [ "$data" != "null" ]; then
-    r_start=$(echo "$data" | jq -r '.start // empty')
-    if [ -n "$r_start" ]; then
-        r_epoch=$(date -d "$r_start" +%s 2>/dev/null)
-        if [ -n "$r_epoch" ]; then
-            running_extra=$((now_epoch - r_epoch))
-        fi
-    fi
-fi
-today_s=$((today_s + running_extra))
-week_s=$((week_s + running_extra))
-month_s=$((month_s + running_extra))
-
-today_h=$((today_s / 3600))
-week_h=$((week_s / 3600))
-month_h=$((month_s / 3600))
-
-if [ -z "$data" ] || [ "$data" = "null" ]; then
-    tooltip="Ingen timer igång\nIdag: ${today_h}h | Vecka: ${week_h}h | Månad: ${month_h}h"
-    printf '{"text": "⏸️ %sh/%sh/%sh", "tooltip": "%s", "class": "stopped"}\n' "${today_h}" "${week_h}" "${month_h}" "$tooltip"
-    exit 0
-fi
-
-description=$(echo "$data" | jq -r '.description // "No description"')
-start=$(echo "$data" | jq -r '.start')
-
-if [ "$start" = "null" ] || [ -z "$start" ]; then
-    tooltip="Ingen timer igång\nIdag: ${today_h}h | Vecka: ${week_h}h | Månad: ${month_h}h"
-    printf '{"text": "⏸️ %sh/%sh/%sh", "tooltip": "%s", "class": "stopped"}\n' "${today_h}" "${week_h}" "${month_h}" "$tooltip"
-    exit 0
-fi
-
-# Calculate elapsed time for current entry
-start_epoch=$(date -d "$start" +%s 2>/dev/null)
-elapsed=$((now_epoch - start_epoch))
-hours=$((elapsed / 3600))
-minutes=$(( (elapsed % 3600) / 60 ))
-
-if [ "$hours" -gt 0 ]; then
-    duration="${hours}h${minutes}m"
-else
-    duration="${minutes}m"
-fi
-
-# Truncate long descriptions
-if [ ${#description} -gt 20 ]; then
-    short_desc="$(echo "$description" | cut -c1-20)..."
-else
-    short_desc="$description"
-fi
-
-tooltip="${description} (${hours}h ${minutes}m)\nIdag: ${today_h}h | Vecka: ${week_h}h | Månad: ${month_h}h"
-
-printf '{"text": "⏱️ %s %s | %sh/%sh/%sh", "tooltip": "%s", "class": "running"}\n' "$short_desc" "$duration" "$today_h" "$week_h" "$month_h" "$tooltip"
+# Single socat connection: send initial commands, then listen
+{
+    printf '{"command":"emit","data":"current_entry"}\n'
+    printf '{"command":"emit","data":"stats"}\n'
+    # Keep stdin open so socat stays connected
+    while true; do sleep 3600; done
+} | socat - UNIX-CONNECT:"$SOCKET" | while IFS= read -r line; do
+    event=$(echo "$line" | jq -r '.event // empty' 2>/dev/null)
+    case "$event" in
+        current_entry.changed)
+            entry_json=$(echo "$line" | jq -c '.entry')
+            emit_waybar
+            ;;
+        stats.changed)
+            day=$(echo "$line" | jq -r '.stats.day.formatted')
+            week=$(echo "$line" | jq -r '.stats.week.formatted')
+            month=$(echo "$line" | jq -r '.stats.month.formatted')
+            emit_waybar
+            ;;
+    esac
+done

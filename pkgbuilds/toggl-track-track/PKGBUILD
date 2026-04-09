@@ -1,0 +1,42 @@
+pkgname=toggl-track-track-git
+_pkgname=toggl-track-track
+pkgver=0.1.0.r30.aad66fb
+pkgrel=1
+pkgdesc='Daemon that emits Toggl Track time entry events in real time'
+arch=('x86_64')
+url='https://github.com/Mange/toggl-track-track'
+license=('custom:public-domain')
+depends=('gcc-libs')
+makedepends=('cargo' 'git')
+provides=('toggl-track-track')
+conflicts=('toggl-track-track')
+source=("git+ssh://git@github.com/Mange/toggl-track-track.git")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd "$_pkgname"
+    printf '%s.r%s.%s' \
+        "$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')" \
+        "$(git rev-list --count HEAD)" \
+        "$(git rev-parse --short HEAD)"
+}
+
+prepare() {
+    cd "$_pkgname"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo fetch --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+    cd "$_pkgname"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR=target
+    # Strip -flto from CFLAGS — LTO on ring's C/asm objects breaks linking with Rust
+    export CFLAGS="${CFLAGS//-flto=auto/}"
+    cargo build --release
+}
+
+package() {
+    cd "$_pkgname"
+    install -Dm755 "target/release/$_pkgname" "$pkgdir/usr/bin/$_pkgname"
+}
