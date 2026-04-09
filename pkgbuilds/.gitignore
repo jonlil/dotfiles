@@ -3,3 +3,5 @@ pkg/
 *.tar.zst
 *.tar.gz
 *.tar.xz
+toggl-track-track/toggl-track-track/
+viska-cli/viska-cli/
