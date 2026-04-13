@@ -24,6 +24,18 @@ Host viska viska.lan
   ProxyJump unifi-controller
   ForwardAgent yes
 
+Match host viska-light-bridge,viska-light-bridge.lan exec "ip neigh show 192.168.1.1 2>/dev/null | grep -q 'ac:8b:a9:a8:53:bd'"
+  HostName 192.168.1.52
+  User pi
+  ProxyJump none
+  ForwardAgent yes
+
+Host viska-light-bridge viska-light-bridge.lan
+  HostName 192.168.1.52
+  User pi
+  ProxyJump unifi-controller
+  ForwardAgent yes
+
 Host edgerouter
   HostName 192.168.1.1
   User ubnt
