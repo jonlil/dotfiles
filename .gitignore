@@ -3,3 +3,4 @@ eww/icons/
 shell/.zshenv
 ssh/config.d/work
 ssh/config.d/homelab-secret
+pkgbuilds/viska-cli/rs-matter/

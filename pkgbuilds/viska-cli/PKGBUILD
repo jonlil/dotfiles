@@ -1,6 +1,6 @@
 pkgname=viska-cli-git
 _pkgname=viska-cli
-pkgver=0.3.0.r24.09b176b
+pkgver=0.3.0.r28.47cc026
 pkgrel=1
 pkgdesc='Viska — control your TV from the command line'
 arch=('x86_64')
@@ -10,8 +10,19 @@ depends=('gcc-libs' 'openssl' 'dbus')
 makedepends=('cargo' 'git' 'nasm')
 provides=('viska')
 conflicts=('viska' 'smartycrank')
-source=("git+ssh://git@github.com/viska-ab/viska-cli.git")
-sha256sums=('SKIP')
+# The `ring` crate bundles hand-written assembly objects that can't take part in
+# LTO; makepkg's global `lto` option injects -flto into ring's cc build and breaks
+# linking (undefined reference to ring_core_*). Disable LTO for this package.
+options=('!lto')
+# viska-cli depends on the rs-matter fork via a path dependency (../rs-matter/rs-matter),
+# so it is cloned as a sibling here and pinned to the commit viska-cli is built against.
+_rsmatter_commit=aca053cc84a55f4792ab17e86f83bed62fc8b36e
+source=(
+    "git+ssh://git@github.com/viska-ab/viska-cli.git"
+    "rs-matter::git+ssh://git@github.com/viska-ab/rs-matter.git#commit=${_rsmatter_commit}"
+)
+sha256sums=('SKIP'
+            'SKIP')
 
 pkgver() {
     cd "$_pkgname"

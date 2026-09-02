@@ -6,18 +6,18 @@
 (defpoll clock_date :interval "60s"
   `date '+%A %d %B'`)
 
-; ── Toggl (cached to single call) ──────────────────────────────
-(defpoll toggl_text :interval "120s"
-  `export PATH="/home/jonas/.local/bin:$PATH"; T=/tmp/eww-toggl; waybar-toggl > $T 2>/dev/null; jq -r '.text // ""' < $T`)
+; ── Toggl (reads cache written by background daemon) ──────────
+(defpoll toggl_text :interval "30s"
+  `jq -r '.text // ""' /tmp/eww-toggl 2>/dev/null`)
 
-(defpoll toggl_today :interval "120s"
-  `T=/tmp/eww-toggl; [ -f $T ] && jq -r '.tooltip // ""' < $T | grep -oP 'Idag: \\K\\d+h' || echo "0h"`)
+(defpoll toggl_today :interval "30s"
+  `jq -r '.tooltip // ""' /tmp/eww-toggl 2>/dev/null | grep -oP 'Idag: \\K[\\d:]+' || echo "--"`)
 
-(defpoll toggl_week :interval "120s"
-  `T=/tmp/eww-toggl; [ -f $T ] && jq -r '.tooltip // ""' < $T | grep -oP 'Vecka: \\K\\d+h' || echo "0h"`)
+(defpoll toggl_week :interval "30s"
+  `jq -r '.tooltip // ""' /tmp/eww-toggl 2>/dev/null | grep -oP 'Vecka: \\K[\\d:]+' || echo "--"`)
 
-(defpoll toggl_month :interval "120s"
-  `T=/tmp/eww-toggl; [ -f $T ] && jq -r '.tooltip // ""' < $T | grep -oP 'Månad: \\K\\d+h' || echo "0h"`)
+(defpoll toggl_month :interval "30s"
+  `jq -r '.tooltip // ""' /tmp/eww-toggl 2>/dev/null | grep -oP 'Månad: \\K[\\d:]+' || echo "--"`)
 
 ; ── Weather (eww-weather script caches internally) ─────────────
 (defpoll weather_temp :interval "600s"

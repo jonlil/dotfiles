@@ -1,5 +1,5 @@
 # Hemma — direkt via LAN
-Match host unifi-controller,jump.kodgrottan.app exec "ip neigh show 192.168.1.1 2>/dev/null | grep -q 'ac:8b:a9:a8:53:bd'"
+Match host unifi-controller,unifi-controller.lan,jump.kodgrottan.app exec "ip neigh show 192.168.1.1 2>/dev/null | grep -q '38:32:7a:16:8e:82'"
   HostName 192.168.1.49
   Port 22
   User pi
@@ -7,12 +7,12 @@ Match host unifi-controller,jump.kodgrottan.app exec "ip neigh show 192.168.1.1 
   ForwardAgent yes
 
 # Borta — via Cloudflare Tunnel
-Host unifi-controller jump.kodgrottan.app
+Host unifi-controller unifi-controller.lan jump.kodgrottan.app
   ProxyCommand cloudflared access ssh --hostname jump.kodgrottan.app
   User pi
   ForwardAgent yes
 
-Match host viska,viska.lan exec "ip neigh show 192.168.1.1 2>/dev/null | grep -q 'ac:8b:a9:a8:53:bd'"
+Match host viska,viska.lan exec "ip neigh show 192.168.1.1 2>/dev/null | grep -q '38:32:7a:16:8e:82'"
   HostName 192.168.1.180
   User pi
   ProxyJump none
@@ -24,13 +24,13 @@ Host viska viska.lan
   ProxyJump unifi-controller
   ForwardAgent yes
 
-Match host viska-light-bridge,viska-light-bridge.lan exec "ip neigh show 192.168.1.1 2>/dev/null | grep -q 'ac:8b:a9:a8:53:bd'"
+Match host viska-daemons,viska-daemons.lan exec "ip neigh show 192.168.1.1 2>/dev/null | grep -q '38:32:7a:16:8e:82'"
   HostName 192.168.1.52
   User pi
   ProxyJump none
   ForwardAgent yes
 
-Host viska-light-bridge viska-light-bridge.lan
+Host viska-daemons viska-daemons.lan
   HostName 192.168.1.52
   User pi
   ProxyJump unifi-controller

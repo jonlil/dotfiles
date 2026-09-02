@@ -125,3 +125,10 @@ _poetry_auto_activate() {
 
 add-zsh-hook chpwd _poetry_auto_activate
 _poetry_auto_activate  # run on shell start too
+
+# bun completions
+[ -s "/home/jonas/.bun/_bun" ] && source "/home/jonas/.bun/_bun"
+
+# bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"

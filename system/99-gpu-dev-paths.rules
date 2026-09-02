@@ -1,0 +1,6 @@
+# Stable /dev/dri symlinks for GPU selection (AQ_DRM_DEVICES).
+# cardN numbering is assigned at boot and can change; these follow the PCI slot.
+# Intel CometLake-H UHD Graphics
+KERNEL=="card*", KERNELS=="0000:00:02.0", SUBSYSTEM=="drm", SUBSYSTEMS=="pci", SYMLINK+="dri/intel-igpu"
+# NVIDIA TU117M GeForce GTX 1650 Ti Mobile
+KERNEL=="card*", KERNELS=="0000:01:00.0", SUBSYSTEM=="drm", SUBSYSTEMS=="pci", SYMLINK+="dri/nvidia-dgpu"

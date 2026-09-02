@@ -2,3 +2,6 @@ Include config.d/*
 
 Host *
   ServerAliveInterval 30
+
+Host viska.lan
+    ProxyJump jump.kodgrottan.app
