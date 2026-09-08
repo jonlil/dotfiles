@@ -1,4 +1,5 @@
 android-studio
+claude-desktop
 deconz
 eww
 gcalcli
@@ -11,6 +12,7 @@ paru-git
 paru-git-debug
 pdk
 qimgv
+shelly
 slack-desktop-wayland
 stripe-cli
 tizen-sdb

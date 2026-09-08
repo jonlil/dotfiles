@@ -1,6 +1,6 @@
 pkgname=viska-cli-git
 _pkgname=viska-cli
-pkgver=0.3.0.r28.47cc026
+pkgver=0.3.0.r29.57321d2
 pkgrel=1
 pkgdesc='Viska — control your TV from the command line'
 arch=('x86_64')

@@ -41,6 +41,7 @@ helm
 hypridle
 hyprland
 hyprlock
+hyprpolkitagent
 imagemagick
 inetutils
 intel-media-driver
