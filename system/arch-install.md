@@ -56,7 +56,7 @@ mount /dev/vg0/lib  /mnt/var/lib
 
 pacstrap -K /mnt base linux linux-firmware lvm2 btrfs-progs grub efibootmgr \
     intel-ucode networkmanager nvidia-open zram-generator sof-firmware \
-    terminus-font vim git openssh
+    terminus-font sudo vim git openssh
 genfstab -U /mnt >> /mnt/etc/fstab
 arch-chroot /mnt
 ```
@@ -65,30 +65,31 @@ arch-chroot /mnt
 
 ```
 MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm)
-HOOKS=(base udev autodetect microcode modconf keyboard keymap consolefont block encrypt lvm2 filesystems)
+HOOKS=(base systemd autodetect microcode modconf kms keyboard sd-vconsole block sd-encrypt lvm2 filesystems fsck)
 ```
 
-The load-bearing parts: `encrypt` **before** `lvm2`, both before `filesystems`.
-The nvidia MODULES require the nvidia driver installed; leave them out until it is.
-Then `mkinitcpio -P`.
+This is the systemd flavor (what the Legion runs): take the stock default line and insert
+`sd-encrypt lvm2` before `filesystems`. The load-bearing parts: `sd-encrypt` **before**
+`lvm2`, both before `filesystems`; `sd-vconsole` reads /etc/vconsole.conf so the
+passphrase prompt gets the Swedish keymap. The nvidia MODULES require the nvidia driver
+installed. Then `mkinitcpio -P`.
+("possibly missing firmware for module qat_6xxx" is a benign warning — Intel QuickAssist,
+unused. The X1E ran the legacy variant instead: `udev`+`encrypt`+`keymap consolefont`
+hooks with `cryptdevice=` on the kernel cmdline — the two dialects must not be mixed.)
 
 ## GRUB (`/etc/default/grub`)
 
 ```
-GRUB_CMDLINE_LINUX="cryptdevice=/dev/nvme0n1p3:cryptlvm root=/dev/vg0/root"
+GRUB_CMDLINE_LINUX="rd.luks.name=<luks-uuid>=cryptlvm rd.luks.options=discard root=/dev/vg0/root"
 GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet nvidia_drm.modeset=1"
-GRUB_PRELOAD_MODULES="part_gpt part_msdos"
-GRUB_ENABLE_CRYPTODISK=y
 ```
 
-On a fresh install, prefer UUID over the device path (NVMe names can shift with
-multiple drives) and add `:allow-discards` so TRIM passes through dm-crypt — audit of
-the old machine found TRIM never reached its SSD (no allow-discards, fstrim.timer
-disabled):
-`cryptdevice=UUID=$(blkid -s UUID -o value /dev/nvme0n1p3):cryptlvm:allow-discards`.
+`rd.luks.*` is the sd-encrypt syntax (the Legion setup). Fill the UUID with
+`blkid -s UUID -o value /dev/nvme0n1p3`. `rd.luks.options=discard` lets TRIM pass
+through dm-crypt — audit of the old machine found TRIM never reached its SSD.
 Also `systemctl enable fstrim.timer` after install.
-`GRUB_ENABLE_CRYPTODISK=y` is not strictly needed with unencrypted `/boot` but is set
-on the old machine and harmless.
+(The X1E's legacy equivalent was `cryptdevice=UUID=...:cryptlvm:allow-discards` plus
+`GRUB_ENABLE_CRYPTODISK=y`; use that only with the legacy `encrypt` hook.)
 
 ## Swap: zram (new on the Legion — the X1E ran without swap)
 
