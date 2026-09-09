@@ -1,6 +1,5 @@
 android-studio
 claude-desktop
-deconz
 eww
 gcalcli
 globalprotect-openconnect-git
@@ -9,15 +8,11 @@ google-cloud-cli
 minecraft-launcher
 openoffice-bin
 paru-git
-paru-git-debug
 pdk
-qimgv
 shelly
 slack-desktop-wayland
 stripe-cli
 tizen-sdb
 toggl-track-track-git
-toggl-track-track-git-debug
 viska-cli-git
-viska-cli-git-debug
 visual-studio-code-bin
