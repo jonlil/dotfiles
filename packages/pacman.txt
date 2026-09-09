@@ -15,7 +15,6 @@ discord
 docker
 docker-buildx
 docker-compose
-dolphin
 dotnet-sdk
 efibootmgr
 electron
@@ -37,6 +36,7 @@ greetd
 greetd-regreet
 grim
 grub
+gvfs
 helm
 hypridle
 hyprland
@@ -125,6 +125,7 @@ tcpdump
 teamspeak3
 terraform
 the_silver_searcher
+thunar
 traceroute
 tree
 ttf-0xproto-nerd
@@ -178,6 +179,7 @@ ttf-tinos-nerd
 ttf-ubuntu-mono-nerd
 ttf-ubuntu-nerd
 ttf-victor-mono-nerd
+tumbler
 unzip
 vim
 waybar
