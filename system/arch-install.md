@@ -55,7 +55,8 @@ mount /dev/vg0/home /mnt/home
 mount /dev/vg0/lib  /mnt/var/lib
 
 pacstrap -K /mnt base linux linux-firmware lvm2 btrfs-progs grub efibootmgr \
-    intel-ucode networkmanager   # amd-ucode instead if the new machine is AMD
+    intel-ucode networkmanager nvidia-open zram-generator sof-firmware \
+    terminus-font vim git openssh
 genfstab -U /mnt >> /mnt/etc/fstab
 arch-chroot /mnt
 ```
@@ -81,9 +82,20 @@ GRUB_ENABLE_CRYPTODISK=y
 ```
 
 On a fresh install, prefer UUID over the device path (NVMe names can shift with
-multiple drives): `cryptdevice=UUID=$(blkid -s UUID -o value /dev/nvme0n1p3):cryptlvm`.
+multiple drives) and add `:allow-discards` so TRIM passes through dm-crypt — audit of
+the old machine found TRIM never reached its SSD (no allow-discards, fstrim.timer
+disabled):
+`cryptdevice=UUID=$(blkid -s UUID -o value /dev/nvme0n1p3):cryptlvm:allow-discards`.
+Also `systemctl enable fstrim.timer` after install.
 `GRUB_ENABLE_CRYPTODISK=y` is not strictly needed with unencrypted `/boot` but is set
 on the old machine and harmless.
+
+## Swap: zram (new on the Legion — the X1E ran without swap)
+
+```
+printf '[zram0]\nzram-size = ram / 2\ncompression-algorithm = zstd\n' > /etc/systemd/zram-generator.conf
+```
+(`zram-generator` is in the pacstrap list; the device appears on next boot.)
 
 ```
 grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB
