@@ -102,6 +102,18 @@ paru -S --needed - < packages/aur.txt      # bootstrap paru manually first
 ./install.sh                                # symlinks + prints the system/ manual steps
 ```
 
+## Legion Pro 5 16IAX10H specifics (target machine, 2026-09)
+
+Core Ultra 9 275HX (Arrow Lake-HX) + RTX 5070 Ti (Blackwell) + 16" 2560x1600 OLED 165/240 Hz.
+
+- **Use `nvidia-open`, not `nvidia`** — the proprietary kernel modules do not support
+  Blackwell. MODULES/cmdline names (`nvidia_drm` etc.) stay the same.
+- `intel-ucode` as written above.
+- Needs a recent ISO — the 2024.03 stick's kernel predates both Arrow Lake and Blackwell.
+- Fan/power profiles: `legion-laptop` module from AUR (thinkpad_acpi does nothing here).
+- Hyprland monitor line: `eDP-1,2560x1600@165` (or @240 — check `hyprctl monitors`),
+  pick scale by taste (1.25 or 1.6).
+
 Machine-specific things that need review on new hardware (do NOT copy blindly):
 monitor line + `AQ_DRM_DEVICES` in `hypr/`, `system/modprobe-nvidia.conf`,
 and the udev rules that create `/dev/dri/intel-igpu` / `nvidia-dgpu` symlinks
