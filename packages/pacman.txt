@@ -43,6 +43,7 @@ hyprland
 hyprlock
 hyprpolkitagent
 imagemagick
+imv
 inetutils
 intel-media-driver
 iw
