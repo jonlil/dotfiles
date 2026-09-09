@@ -7,7 +7,7 @@
 ---- MONITORS ----
 ------------------
 
-hl.monitor({ output = "eDP-1", mode = "1920x1080",     position = "0x0",       scale = 1 })
+hl.monitor({ output = "eDP-1", mode = "2560x1600@165",  position = "0x0",       scale = 1.25 })
 hl.monitor({ output = "DP-1",  mode = "2560x1440@144", position = "auto-left", scale = 1 })
 -- Tillfällig skärm hos Dinice (Philips 27M2N3500N via HDMI), matchas på beskrivning
 hl.monitor({ output = "desc:Philips Consumer Electronics Company 27M2N3500N", mode = "2560x1440@144", position = "auto-left", scale = 1 })
@@ -18,7 +18,7 @@ hl.monitor({ output = "desc:Philips Consumer Electronics Company 27M2N3500N", mo
 ---------------------
 
 local terminal    = "kitty"
-local fileManager = "dolphin"
+local fileManager = "thunar"
 local menu        = "fuzzel"
 
 

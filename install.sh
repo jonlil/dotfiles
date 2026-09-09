@@ -17,7 +17,7 @@ link() {
 }
 
 # Hyprland
-link "$DOTFILES/hypr/hyprland.conf" "$HOME/.config/hypr/hyprland.conf"
+link "$DOTFILES/hypr/hyprland.lua" "$HOME/.config/hypr/hyprland.lua"
 
 # Waybar
 link "$DOTFILES/waybar/config.jsonc" "$HOME/.config/waybar/config.jsonc"
