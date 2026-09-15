@@ -1,0 +1,84 @@
+#!/bin/bash
+# Installerar paketen i packages/aur.txt.
+#
+# Två saker som gör det här mindre trivialt än pacman-motsvarigheten:
+#
+#  1. `paru -S --needed - < aur.txt` FUNGERAR INTE. paru konsumerar stdin till
+#     paketlistan och kan sedan inte öppna terminalen för sina frågor om
+#     PKGBUILD-granskning: "error: No such device or address (os error 6)".
+#     Paketen måste skickas som argument.
+#
+#  2. Två av paketen finns inte på AUR utan byggs från pkgbuilds/ i det här
+#     repot. De hämtar källkod över SSH, så din GitHub-nyckel måste fungera.
+#
+# Användning:  install-aur [paket ...]
+#              Utan argument tas allt i aur.txt som inte redan är installerat.
+set -euo pipefail
+
+SELF="$(readlink -f "$0")"
+DOTFILES="$(dirname "$(dirname "$SELF")")"
+AUR_LIST="$DOTFILES/packages/aur.txt"
+PKGBUILD_DIR="$DOTFILES/pkgbuilds"
+
+[ -r "$AUR_LIST" ] || { echo "Hittar inte $AUR_LIST" >&2; exit 1; }
+
+# Vilka pkgname finns som lokala PKGBUILDs?
+local_pkgs=""
+for d in "$PKGBUILD_DIR"/*/; do
+    [ -f "$d/PKGBUILD" ] || continue
+    name=$(sed -n 's/^pkgname=//p' "$d/PKGBUILD" | tr -d "'\"" | head -1)
+    [ -n "$name" ] && local_pkgs="$local_pkgs $name:$d"
+done
+
+is_local() {
+    for entry in $local_pkgs; do
+        [ "${entry%%:*}" = "$1" ] && return 0
+    done
+    return 1
+}
+
+local_dir_for() {
+    for entry in $local_pkgs; do
+        if [ "${entry%%:*}" = "$1" ]; then echo "${entry#*:}"; return; fi
+    done
+}
+
+# Vad ska installeras?
+if [ $# -gt 0 ]; then
+    wanted="$*"
+else
+    wanted=$(grep -v '^\s*\(#\|$\)' "$AUR_LIST")
+fi
+
+from_aur=""
+from_repo=""
+for p in $wanted; do
+    if pacman -Q "$p" >/dev/null 2>&1; then
+        continue  # redan installerat
+    elif is_local "$p"; then
+        from_repo="$from_repo $p"
+    else
+        from_aur="$from_aur $p"
+    fi
+done
+
+if [ -z "$from_aur" ] && [ -z "$from_repo" ]; then
+    echo "Allt är redan installerat."
+    exit 0
+fi
+
+if [ -n "$from_aur" ]; then
+    echo "==> Från AUR:$from_aur"
+    # Som argument, inte via stdin - se kommentaren överst.
+    paru -S --needed $from_aur
+fi
+
+for p in $from_repo; do
+    dir=$(local_dir_for "$p")
+    echo "==> Bygger $p från $dir"
+    ( cd "$dir" && makepkg -si --needed )
+done
+
+echo
+echo "Kvar att installera:"
+comm -23 <(sort "$AUR_LIST") <(pacman -Qemq | sort) | sed 's/^/  /' || true

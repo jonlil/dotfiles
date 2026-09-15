@@ -8,6 +8,7 @@ bluez
 bluez-deprecated-tools
 bluez-utils
 brightnessctl
+btrfs-progs
 cloudflared
 cups
 cups-pdf
@@ -25,6 +26,7 @@ firefox
 foot
 fuzzel
 fwupd
+gamemode
 gamescope
 git
 github-cli
@@ -46,6 +48,7 @@ imagemagick
 imv
 inetutils
 intel-media-driver
+intel-ucode
 iw
 jadx
 jdk21-openjdk
@@ -54,12 +57,16 @@ k9s
 kitty
 kubectl
 less
+lib32-gamemode
+lib32-mangohud
+lib32-vulkan-intel
 libva-utils
 linux
 linux-firmware
 linux-headers
 lvm2
 mako
+mangohud
 mariadb-clients
 minio-client
 mitmproxy
@@ -74,7 +81,7 @@ noto-fonts-cjk
 noto-fonts-emoji
 noto-fonts-extra
 nss-mdns
-nvidia-open-dkms
+nvidia-open
 nvm
 obsidian
 openssh
@@ -97,6 +104,7 @@ pigz
 pipewire-pulse
 plantuml
 postgresql-libs
+power-profiles-daemon
 ptyxis
 pulsemixer
 pyenv
@@ -124,6 +132,7 @@ system-config-printer
 systemd-resolvconf
 tcpdump
 teamspeak3
+terminus-font
 terraform
 the_silver_searcher
 thunar
@@ -183,6 +192,8 @@ ttf-victor-mono-nerd
 tumbler
 unzip
 vim
+vulkan-intel
+vulkan-tools
 waybar
 wev
 wireplumber
@@ -193,4 +204,5 @@ xdg-desktop-portal-hyprland
 xdotool
 xorg-xhost
 zbar
+zram-generator
 zsh

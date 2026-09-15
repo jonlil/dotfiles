@@ -7,7 +7,7 @@ google-chrome
 google-cloud-cli
 minecraft-launcher
 openoffice-bin
-paru-git
+paru
 pdk
 shelly
 slack-desktop-wayland

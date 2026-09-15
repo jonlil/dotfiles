@@ -1,0 +1,58 @@
+#!/bin/sh
+# Snapshotta explicit installerade paket till packages/ i dotfiles-repot.
+#
+# Låg medvetet i install.sh tidigare, men det gjorde install.sh farlig att köra
+# på en färsk maskin: den skrev över listorna med den nya maskinens tomma läge
+# och raderade därmed listan över vad som skulle installeras.
+#
+# Körs efter att du medvetet lagt till eller tagit bort paket:  save-packages
+# En lista som skulle halveras skrivs inte utan --force.
+set -e
+
+FORCE=0
+[ "${1:-}" = "--force" ] && FORCE=1
+
+# Skriptet symlinkas till ~/.local/bin av install.sh, så följ symlinken hem.
+SELF="$(readlink -f "$0")"
+DOTFILES="$(dirname "$(dirname "$SELF")")"
+PKGDIR="$DOTFILES/packages"
+
+[ -d "$PKGDIR" ] || { echo "Hittar inte $PKGDIR" >&2; exit 1; }
+
+skipped=0
+
+# Skriver $2 till $1, men vägrar om listan skulle halveras. En halverad lista
+# betyder nästan alltid en färsk maskin där paketen inte hunnit installeras -
+# det var precis så aur.txt nollades när den här dumpen låg i install.sh.
+save_list() {
+    file="$1"
+    new="$2"
+    name="$(basename "$file")"
+    new_count=$(wc -l < "$new")
+
+    if [ -f "$file" ]; then
+        old_count=$(wc -l < "$file")
+        if [ "$old_count" -gt 10 ] && [ "$new_count" -lt $((old_count / 2)) ] && [ "$FORCE" -eq 0 ]; then
+            echo "SKIP: $name skulle krympa $old_count -> $new_count paket."
+            echo "      Färsk maskin? Installera paketen först. Menar du allvar: --force"
+            skipped=1
+            return 0
+        fi
+    fi
+
+    cat "$new" > "$file"
+    echo "$name: $new_count paket"
+}
+
+tmp_pacman=$(mktemp)
+tmp_aur=$(mktemp)
+trap 'rm -f "$tmp_pacman" "$tmp_aur"' EXIT
+
+pacman -Qenq > "$tmp_pacman"
+pacman -Qemq > "$tmp_aur"
+
+save_list "$PKGDIR/pacman.txt" "$tmp_pacman"
+save_list "$PKGDIR/aur.txt"    "$tmp_aur"
+
+[ "$skipped" -eq 1 ] && exit 1
+exit 0
