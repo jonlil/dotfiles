@@ -1,0 +1,39 @@
+#!/bin/sh
+# Växlar plattformsprofil när ett spel startar och slutar.
+#
+# Anropas av gamemode via [custom] start=/end= i gamemode.ini, alltså en gång
+# per spel utan att launch-kommandot behöver veta något. Kräver att spelet
+# startas med gamemoderun - se system/gaming.md.
+#
+# Sparar den profil som gällde före spelet och återställer den efteråt, istället
+# för att gissa "balanced". Är du på power-saver när du startar hamnar du där
+# igen när du slutar.
+#
+# Användning: game-power start|end
+set -e
+
+STATE="${XDG_RUNTIME_DIR:-/tmp}/game-power.prev"
+
+case "$1" in
+    start)
+        # Spara bara första gången. Startar ett andra spel medan det första kör
+        # skulle annars skriva "performance" som det sparade läget.
+        if [ ! -f "$STATE" ]; then
+            powerprofilesctl get > "$STATE" 2>/dev/null || echo balanced > "$STATE"
+        fi
+        powerprofilesctl set performance
+        ;;
+    end)
+        if [ -f "$STATE" ]; then
+            prev=$(cat "$STATE")
+            rm -f "$STATE"
+        else
+            prev=balanced
+        fi
+        powerprofilesctl set "$prev"
+        ;;
+    *)
+        echo "Användning: $0 start|end" >&2
+        exit 1
+        ;;
+esac

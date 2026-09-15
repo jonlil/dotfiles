@@ -1,6 +1,10 @@
-# Stable /dev/dri symlinks for GPU selection (AQ_DRM_DEVICES).
-# cardN numbering is assigned at boot and can change; these follow the PCI slot.
+# Stable /dev/dri symlinks for GPU selection (AQ_DRM_DEVICES, LIBVA_DRM_DEVICE).
+# cardN and renderDN numbering is assigned at boot in probe order and can change;
+# these follow the PCI slot instead. On the Legion the dGPU has taken renderD128
+# and the iGPU renderD129, i.e. the reverse of what the card numbers suggest.
 # Intel Arrow Lake iGPU
-KERNEL=="card*", KERNELS=="0000:00:02.0", SUBSYSTEM=="drm", SUBSYSTEMS=="pci", SYMLINK+="dri/intel-igpu"
+KERNEL=="card*",    KERNELS=="0000:00:02.0", SUBSYSTEM=="drm", SUBSYSTEMS=="pci", SYMLINK+="dri/intel-igpu"
+KERNEL=="renderD*", KERNELS=="0000:00:02.0", SUBSYSTEM=="drm", SUBSYSTEMS=="pci", SYMLINK+="dri/intel-igpu-render"
 # NVIDIA GB205M GeForce RTX 5070 Ti Mobile
-KERNEL=="card*", KERNELS=="0000:02:00.0", SUBSYSTEM=="drm", SUBSYSTEMS=="pci", SYMLINK+="dri/nvidia-dgpu"
+KERNEL=="card*",    KERNELS=="0000:02:00.0", SUBSYSTEM=="drm", SUBSYSTEMS=="pci", SYMLINK+="dri/nvidia-dgpu"
+KERNEL=="renderD*", KERNELS=="0000:02:00.0", SUBSYSTEM=="drm", SUBSYSTEMS=="pci", SYMLINK+="dri/nvidia-dgpu-render"

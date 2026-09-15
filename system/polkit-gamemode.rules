@@ -1,0 +1,22 @@
+// Låt gamemode sätta CPU-governorn.
+//
+// Arch levererar /usr/share/polkit-1/actions/com.feralinteractive.GameMode.policy
+// med allow_active=no, så gamemoded nekas och `gamemoded -t` failar på
+// "Verifying CPU governor setting". Den här regeln ger just den ena åtgärden
+// till jonas - inget annat, och bara från en aktiv lokal session.
+//
+// OBS: gamemode.ini sätter desiredgov=powersave, INTE performance. Regeln
+// behövs alltså inte för att skruva upp något, utan för att gamemodes
+// governor-anrop ska lyckas tyst istället för att logga ett fel vid varje
+// spelstart. Effekten kommer från [custom]-hooken som byter PPD-profil, och
+// PPD kan bara skriva EPP så länge governorn INTE är performance.
+// Se system/gaming.md.
+//
+// Installeras som /etc/polkit-1/rules.d/49-gamemode.rules
+polkit.addRule(function(action, subject) {
+    if (action.id == "com.feralinteractive.GameMode.governor-helper" &&
+        subject.user == "jonas" &&
+        subject.local && subject.active) {
+        return polkit.Result.YES;
+    }
+});
