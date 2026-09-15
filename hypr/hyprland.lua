@@ -7,17 +7,49 @@
 ---- MONITORS ----
 ------------------
 
-hl.monitor({ output = "eDP-1", mode = "2560x1600@165",  position = "0x0",       scale = 1.25 })
-hl.monitor({ output = "DP-1",  mode = "2560x1440@144", position = "auto-left", scale = 1 })
+-- eDP-1 deklareras i applyLaptopScale() nedan: skalan beror på om en extern
+-- skärm är inkopplad. Ensam laptopskärm får mindre skala (mer skärmyta),
+-- dockad går den tillbaka till 1.6 så fönster inte hoppar i storlek mellan
+-- skärmarna.
+local laptopMode         = "2560x1600@165"
+local laptopScaleSolo    = 1.25
+local laptopScaleDocked  = 1.6
+
+-- MSI hemma. Matchas på beskrivning: på Legion sitter den på nvidia-utgången DP-3,
+-- på förra datorn var den DP-1, och connector-numret kan flytta mellan portar.
+hl.monitor({ output = "desc:Microstep MSI MAG271CQR", mode = "2560x1440@144", position = "auto-left", scale = 1 })
 -- Tillfällig skärm hos Dinice (Philips 27M2N3500N via HDMI), matchas på beskrivning
 hl.monitor({ output = "desc:Philips Consumer Electronics Company 27M2N3500N", mode = "2560x1440@144", position = "auto-left", scale = 1 })
+
+-- Vid monitor.removed kan den frånkopplade skärmen fortfarande ligga kvar i
+-- hl.get_monitors(); exkludera den explicit när eventet ger oss namnet.
+local function hasExternalMonitor(excludeName)
+    for _, m in ipairs(hl.get_monitors()) do
+        if m.name ~= "eDP-1" and m.name ~= excludeName then return true end
+    end
+    return false
+end
+
+local function applyLaptopScale(excludeName)
+    hl.monitor({
+        output   = "eDP-1",
+        mode     = laptopMode,
+        position = "0x0",
+        scale    = hasExternalMonitor(excludeName) and laptopScaleDocked or laptopScaleSolo,
+    })
+end
+
+applyLaptopScale()
 
 
 ---------------------
 ---- MY PROGRAMS ----
 ---------------------
 
-local terminal    = "kitty"
+-- Processer som Hyprland startar ärver kompositorns cwd, och den är den katalog
+-- Hyprland startades från. Ange katalog explicit så terminalen alltid öppnar i
+-- hemkatalogen oavsett hur sessionen startades.
+local terminal    = "kitty --directory " .. os.getenv("HOME")
 local fileManager = "thunar"
 local menu        = "fuzzel"
 
@@ -46,14 +78,27 @@ end)
 -- Symlinks come from /etc/udev/rules.d/99-gpu-dev-paths.rules and follow the
 -- PCI slot, since card* numbering is reassigned at boot.
 hl.env("AQ_DRM_DEVICES", "/dev/dri/intel-igpu:/dev/dri/nvidia-dgpu")
+-- ~/.local/bin ligger inte i PATH på Arch, och allt Hyprland startar ärver
+-- kompositorns PATH - inklusive Steam, som därför inte hittade nvidia-offload.
+-- Sätts här istället för i zprofile, som bara gäller för inloggade zsh-shellar.
+local localbin = os.getenv("HOME") .. "/.local/bin"
+if not string.find(os.getenv("PATH") or "", localbin, 1, true) then
+    hl.env("PATH", localbin .. ":" .. os.getenv("PATH"))
+end
+
 hl.env("XCURSOR_SIZE", "32")
 hl.env("QT_QPA_PLATFORMTHEME", "qt5ct") -- change to qt6ct if you have that
 hl.env("LIBVA_DRIVER_NAME", "iHD")
-hl.env("LIBVA_DRM_DEVICE", "/dev/dri/renderD129")
+-- Samma sak för render-noden: renderD128/129 byter plats mellan boots, och på
+-- Legion är det dGPU:n som tar renderD128. Pekar iHD på nvidia-noden slutar
+-- hårdvaruavkodning fungera tyst, så gå via PCI-symlinken.
+hl.env("LIBVA_DRM_DEVICE", "/dev/dri/intel-igpu-render")
 hl.env("XDG_SESSION_TYPE", "wayland")
 hl.env("GDK_SCALE", "1")
 hl.env("SSH_AUTH_SOCK", os.getenv("XDG_RUNTIME_DIR") .. "/gcr/ssh")
-hl.env("WLR_DRM_NO_ATOMIC", "1")
+-- WLR_DRM_NO_ATOMIC togs bort: wlroots-variabel som Hyprland inte läser sedan
+-- aquamarine ersatte wlroots i 0.40. Motsvarigheten heter AQ_NO_ATOMIC, men
+-- atomic modesetting ska vara på.
 
 
 -----------------------
@@ -194,6 +239,17 @@ hl.window_rule({ match = { class = "spotify" },                                 
 -- tiling them below that scales the image and offsets mouse input.
 hl.window_rule({ match = { class = "steam_app_447020" },                                       fullscreen = true }) -- FS17
 hl.window_rule({ match = { class = "steam_app_1248130" },                                      fullscreen = true }) -- FS22
+hl.window_rule({ match = { class = "steam_app_2300320" },                                      fullscreen = true }) -- FS25
+-- Matcha inte på title här: fönsterregler utvärderas när fönstret mappas, och
+-- titeln sätts ofta senare - en title-regel matchar då ingenting. Testat.
+--
+-- OBS vid skärmbyte: eDP-1 är 16:10 (2560x1600) och MSI:n 16:9 (2560x1440).
+-- GIANTS-spelen kör windowed_fullscreen men behåller sin konfigurerade
+-- renderupplösning från game.xml istället för att följa fönstret. Spelar du på
+-- den skärm som INTE matchar det sparade värdet sträcks bilden 11 % - runda
+-- ikoner blir ovala. Fixas i spelet: Inställningar -> Grafik -> Upplösning,
+-- välj skärmens native. Spelet sparar då rätt värde själv.
+-- game.xml ligger i compatdata/<appid>/pfx/drive_c/users/steamuser/Documents/My Games/
 
 -- Dual monitor: communication on laptop, work on external
 hl.workspace_rule({ workspace = "1", monitor = "eDP-1" })
@@ -201,16 +257,30 @@ hl.workspace_rule({ workspace = "2", monitor = "eDP-1" })
 hl.workspace_rule({ workspace = "8", monitor = "eDP-1" })
 
 -- Workspace 3-6 hamnar på den externa skärm som är inkopplad (plug and play).
--- Prioritetsordning: MSI hemma (DP-1), Philips hos Dinice (HDMI-A-1). Utan extern skärm: eDP-1.
-local externalMonitors = { "DP-1", "HDMI-A-1" }
+-- Prioritetsordning: MSI hemma, Philips hos Dinice, annars första externa skärmen.
+-- Utan extern skärm: eDP-1. Matchning sker på beskrivning, inte connector-namn,
+-- eftersom samma skärm kan heta DP-1 på en dator och DP-3 på en annan.
+local externalMonitors = { "MSI MAG271CQR", "Philips Consumer Electronics Company 27M2N3500N" }
 
 local function applyWorkWorkspaces()
-    local present = {}
-    for _, m in ipairs(hl.get_monitors()) do present[m.name] = true end
+    local monitors = hl.get_monitors()
 
     local target = "eDP-1"
-    for _, name in ipairs(externalMonitors) do
-        if present[name] then target = name break end
+    for _, wanted in ipairs(externalMonitors) do
+        for _, m in ipairs(monitors) do
+            if m.description and m.description:find(wanted, 1, true) then
+                target = m.name
+                break
+            end
+        end
+        if target ~= "eDP-1" then break end
+    end
+
+    -- Okänd extern skärm: ta första som inte är den inbyggda panelen.
+    if target == "eDP-1" then
+        for _, m in ipairs(monitors) do
+            if m.name ~= "eDP-1" then target = m.name break end
+        end
     end
 
     hl.workspace_rule({ workspace = "3", monitor = target, default = (target ~= "eDP-1") })
@@ -228,8 +298,16 @@ local function applyWorkWorkspaces()
 end
 
 applyWorkWorkspaces()
-hl.on("monitor.added",   function() applyWorkWorkspaces() end)
-hl.on("monitor.removed", function() applyWorkWorkspaces() end)
+
+hl.on("monitor.added", function()
+    applyLaptopScale()
+    applyWorkWorkspaces()
+end)
+
+hl.on("monitor.removed", function(m)
+    applyLaptopScale(type(m) == "table" and m.name or nil)
+    applyWorkWorkspaces()
+end)
 
 
 ---------------------
