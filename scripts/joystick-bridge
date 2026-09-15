@@ -1,0 +1,535 @@
+#!/usr/bin/env python3
+"""Speglar handkontroller till virtuella uinput-JOYSTICKS, så att FS25 matchar
+dem mot sina egna enhetsdefinitioner i stället för att ta emot dem som
+generiska XInput-gamepads.
+
+En process hanterar alla enheter i DEVICES nedan. Saknas en är det bara att
+koppla in den - bryggan söker om var femte sekund.
+
+## Varför det behövs
+
+FS25 identifierar handkontroller via shared/inputDevices/*.xml. Ingen av de 72
+definitionsfilerna har `xinput` bland sina backends - enumereringen sker via
+RawInput. En enhet som Wine klassar som XInput-gamepad matchar därför INGEN
+definition, faller igenom till generisk hantering och får Xbox-layoutens elva
+knappar med Xbox-etiketter.
+
+Wine sätter is_gamepad i lnxev_device_create() (dlls/winebus.sys/bus_udev.c),
+och is_gamepad avgör vilken HID-användning enheten får:
+
+    is_gamepad = TRUE   ->  Usage Page 0x01, Usage 0x05 (Game Pad)  -> XInput
+    is_gamepad = FALSE  ->  Usage Page 0x01, Usage 0x04 (Joystick)
+
+Våra två enheter hamnar där av helt olika skäl:
+
+  Saitek-sidopanelen klassas FELAKTIGT. Wine känner inte enheten och gissar
+  på antal:
+
+      if (is_xbox_gamepad(vid, pid)) is_gamepad = TRUE;
+      else if (axis_count == 6 && button_count >= (hat_count ? 10 : 14))
+          is_gamepad = TRUE;
+
+  Panelen har exakt 6 axlar och 28 knappar, så gissningen slår till trots att
+  en manöverpanel inte är någon gamepad. En sjunde, oanvänd axel gör villkoret
+  falskt. Ratten (0738:2217) klarar sig på en enda knapp: den har 9, och
+  tröskeln är 10 eftersom den har hatt.
+
+  Pro Controllern klassas KORREKT. Den deklarerar själv Usage 0x05 (Game Pad)
+  i sin HID-deskriptor, och Wine vidarebefordrar det troget. Felet ligger i
+  vad Wine gör sedan: is_gamepad - inte is_xbox_gamepad - ger
+  WINEBUS\\WINE_COMP_XINPUT, så winexinput binder och lägger till &IG_00 i
+  enhetens hardware id:
+
+      WINEXINPUT\\VID_057E&PID_2009&IG_00\\0&64-B5-C6-43-7C-E5&0&0&1
+      HID\\VID_057E&PID_2009&IG_00\\512&64-B5-C6-43-7C-E5&0&0&1
+
+  Enheten döljs alltså inte - den byter namn. På Windows är IG_ reserverat för
+  Xbox-kompatibla enheter och är signalen till RawInput- och DirectInput-program
+  att hoppa över enheten. Att FS25 ignorerar den är därför troligen rätt
+  beteende; felet är att suffixet sattes på en Nintendo-kontroll.
+
+  Bryggan kringgår det genom att flytta knapparna till BTN_JOYSTICK
+  (0x120-0x12f), så att enheten inte längre uppfattas som gamepad.
+
+Se system/gaming.md för vad som är uppmätt och vad som är slutledning, och för
+hur en buggrapport till WineHQ borde formuleras.
+
+## Samspel med originalet
+
+Den virtuella enheten måste ha samma vendor, product, version och namn som
+originalet för att matcha <productKey> och nyckelorden i <productName>. Två
+enheter med samma id kolliderar i Wine - den fysiska vinner, eftersom den har
+en hidraw-nod med enhetens äkta HID-deskriptor. Därför måste originalet göras
+oläsbart för Wine med en udev-regel, och den här tjänsten köras som root.
+
+Se system/gaming.md för hela historien med mätningar.
+"""
+
+import fcntl
+import os
+import select
+import struct
+import sys
+import time
+
+EV_SYN, EV_KEY, EV_ABS = 0x00, 0x01, 0x03
+SYN_REPORT = 0
+BUS_VIRTUAL = 0x06          # inte BUS_USB: en uinput-enhet har ingen USB-foralder,
+                            # och Wine loggar da "Failed to get parent device"
+                            # nar den forsoker harleda ett ContainerId.
+
+BTN_GAMEPAD, BTN_JOYSTICK = 0x130, 0x120
+TRIGGER_HAPPY = 0x2C0
+
+
+def seq(src_first, dst_first, count):
+    """count knappar i foljd, flyttade till ett annat kodomrade."""
+    return [(src_first + i, dst_first + i) for i in range(count)]
+
+
+def same(first, count):
+    """count knappar i foljd, oforandrade."""
+    return [(first + i, first + i) for i in range(count)]
+
+
+# Ordningen i "buttons" ar den ordning Wine numrerar HID-knapparna: stigande
+# MALKOD. Spelets <buttonMapping physical="N"> raknar i samma ordning.
+DEVICES = [
+    {
+        "id": "saitek-panel",
+        "match": (0x0738, 0x2218),
+        "version": 0x0110,
+        "name": b"Mad Catz Saitek Side Panel Control Deck",
+        # Knapp 1-16 flyttas ur gamepad-omradet; 17-28 ligger redan pa
+        # BTN_TRIGGER_HAPPY och ror inte heuristiken.
+        "buttons": seq(BTN_GAMEPAD, BTN_JOYSTICK, 16) + same(TRIGGER_HAPPY, 12),
+        "axes": [0x00, 0x01, 0x02, 0x03, 0x04, 0x05],   # X, Y, Z, RX, RY, RZ
+        # ABS_THROTTLE, aldrig driven. Bryter axis_count == 6 sa att
+        # heuristiken inte slar till. Spelet mappar pa axelNAMN, inte antal -
+        # rattens egen definition har 7 axisMappings for en 6-axlig enhet och
+        # mappar physical="Y" tva ganger, sa en omappad extraaxel ignoreras.
+        "extra_axes": [0x06],
+        # Hattar raknas separat fran axlar i heuristiken. Kravs for att dinput
+        # ska ge DI8DEVTYPEJOYSTICK_STANDARD i stallet for _LIMITED, enligt
+        # villkoret i dlls/dinput/joystick_hid.c.
+        "hats": [0x10, 0x11],
+        # 1..255 i stallet for 0..255: axlarna ar 8-bitars med jamnt antal
+        # varden, sa mitten 127,5 finns inte som rapporterbart varde. Spaken
+        # vilar pa 128 och lag darfor alltid ett halvt steg fel, vilket med
+        # nollad dodzon blev konstant insignal - kameran gled och traktorn drog.
+        "axis_range": (1, 255),
+        # Panelens axlar vilar exakt pa mitten sedan 99-saitek-axis-center.rules
+        # satte omradet till 1..255, sa den behover ingen.
+        "deadzone": 0.0,
+    },
+    {
+        "id": "pro-controller",
+        "match": (0x057E, 0x2009),
+        "version": 0x8001,
+        "name": b"Pro Controller",      # innehaller nyckelorden "pro" och "controller"
+        # NintendoSwitchProController.xml vill ha Nintendos egen ordning, som
+        # INTE ar evdev-koderna sorterade: hid-nintendo mappar efter fysiskt
+        # lage, sa BTN_SOUTH ar B och BTN_WEST ar Y - men sorterat pa kod
+        # hamnar X (0x133) fore Y (0x134).
+        #
+        #   profilen vill:  0=B  1=A  2=Y  3=X  4=LB 5=RB 6=LT 7=RT 8=- 9=+
+        #
+        # Spakklicken pa plats 10 och 11 ar ett specialfall, se kommentaren dar.
+        "buttons": [
+            (0x130, BTN_JOYSTICK + 0),    # BTN_SOUTH  -> B
+            (0x131, BTN_JOYSTICK + 1),    # BTN_EAST   -> A
+            (0x134, BTN_JOYSTICK + 2),    # BTN_WEST   -> Y
+            (0x133, BTN_JOYSTICK + 3),    # BTN_NORTH  -> X
+            (0x136, BTN_JOYSTICK + 4),    # BTN_TL     -> LB
+            (0x137, BTN_JOYSTICK + 5),    # BTN_TR     -> RB
+            (0x138, BTN_JOYSTICK + 6),    # BTN_TL2    -> LT
+            (0x139, BTN_JOYSTICK + 7),    # BTN_TR2    -> RT
+            (0x13a, BTN_JOYSTICK + 8),    # BTN_SELECT -> -
+            (0x13b, BTN_JOYSTICK + 9),    # BTN_START  -> +
+            # Spakklicken ar KORSADE med avsikt. Nintendo-definitionen mappar
+            # dem tvartemot Sony och Xbox:
+            #
+            #   Sony      physical 10 (LS) -> logical 10,  11 (RS) -> logical 11
+            #   Nintendo  physical 10 (LS) -> logical 11,  11 (RS) -> logical 10
+            #
+            # CAMERA_SWITCH sitter pa BUTTON_12, alltsa logisk 11 - hoger
+            # spakklick pa alla andra pads, men vanster pa Pro Controllern.
+            #
+            # Om korsningen ar ett fel hos GIANTS eller kompenserar for att en
+            # riktig Pro Controller listar knapparna i annan ordning i sin akta
+            # HID-rapport gar inte att avgora har: hid-nintendo bygger
+            # evdev-mappningen sjalv och bryggan syntetiserar en ny deskriptor
+            # ur den. Men eftersom bryggan bestammer ordningen kan vi matcha
+            # deras LOGISKA platser i stallet for deras etiketter, och da blir
+            # resultatet detsamma som pa ovriga pads.
+            (0x13e, BTN_JOYSTICK + 10),   # BTN_THUMBR -> hamnar pa logisk 11
+            (0x13d, BTN_JOYSTICK + 11),   # BTN_THUMBL -> hamnar pa logisk 10
+            (0x13c, BTN_JOYSTICK + 12),   # BTN_MODE   -> Home, utanfor profilen
+            (0x135, BTN_JOYSTICK + 13),   # BTN_Z      -> Capture, utanfor profilen
+        ],
+        # Profilen vill ha usages X, Y, RX, RY. Wine tilldelar dem POSITIONELLT
+        # i ordningen X, Y, Z, Rx, Ry, Rz - inte efter evdev-kod. Ett hal i
+        # kodserien forskjuter darfor allt efter hålet:
+        #
+        #   utan ABS_Z:  X(0) Y(1) RX(3) RY(4)  ->  X, Y, Z, Rx
+        #                                           RY lases som RX, sa hoger
+        #                                           spak nerat blev vanster/hoger
+        #
+        # ABS_Z fyller hålet och ar aldrig driven. Fem axlar, sa
+        # antalsheuristiken (axis_count == 6) kan fortfarande inte sla till.
+        "axes": [0x00, 0x01, 0x03, 0x04],   # X, Y, RX, RY - profilens fyra
+        "extra_axes": [0x02],               # ABS_Z, utfyllnad sa RX/RY hamnar ratt
+        "hats": [0x10, 0x11],
+        "axis_range": None,                 # ta omradet fran originalet
+        # Spakarna vilar snett - uppmatt X 3,9 % och Y 6,5 % fran mitten, och X
+        # skickar smahandelser av sig sjalv. Utan dodzon blir det konstant
+        # insignal: kameran snurrar och figuren gar av sig sjalv.
+        #
+        # Dodzonen laggs HAR och inte i spelet, av tva skal. Spelets globala
+        # dodzon i game.xml galler alla enheter, och den ar nollad for rattens
+        # skull. Och per-enhet-vardet i inputBinding.xml skrivs over varje gang
+        # spelet sparar. I bryggan galler den bara den har enheten, och den
+        # galler for allt som laser enheten.
+        "deadzone": 0.12,
+        # Spaken ar for kanslig for styrning jamfort med ratt och tangentbord.
+        # Kurvan mjukar upp mitten utan att sanka maxutslaget.
+        #
+        # Underlaget ar till stor del subjektivt: det enda uppmatta ar att
+        # GIANTS egen enhetsdefinition ger kontrollen scale=1.2 mot rattens
+        # scale=1, alltsa 20 % mer utslag. Resten bygger pa jamforelsen mot
+        # ratt och tangentbord vid spelning.
+        #
+        #   1.0  rakt av          30 % spak -> 20,5 % utslag
+        #   1.5  nu               30 % spak ->  9,3 %
+        #   2.0  kraftigt         30 % spak ->  4,2 %
+        "curve": 1.5,
+    },
+]
+
+UI_SET_EVBIT = 0x40045564
+UI_SET_KEYBIT = 0x40045565
+UI_SET_ABSBIT = 0x40045567
+UI_DEV_CREATE = 0x5501
+UI_DEV_DESTROY = 0x5502
+
+EVENT_FMT = "llHHi"
+EVENT_SIZE = struct.calcsize(EVENT_FMT)
+ABS_CNT = 64
+RESCAN_SECONDS = 5
+
+
+def EVIOCGABS(axis):
+    return (2 << 30) | (24 << 16) | (ord("E") << 8) | (0x40 + axis)
+
+
+def EVIOCGBIT(ev, nbytes):
+    return (2 << 30) | (nbytes << 16) | (ord("E") << 8) | (0x20 + ev)
+
+
+def axis_info_path(path, axis):
+    """Som axis_info men oppnar noden sjalv."""
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except OSError:
+        return None
+    try:
+        return axis_info(fd, axis)
+    finally:
+        os.close(fd)
+
+
+def axis_info(fd, axis):
+    """(varde, min, max) for en axel, eller None."""
+    buf = bytearray(24)
+    try:
+        fcntl.ioctl(fd, EVIOCGABS(axis), buf)
+    except OSError:
+        return None
+    return struct.unpack("iiiiii", buf)[:3]
+
+
+def has_all_buttons(path, codes):
+    """Sant om noden exponerar samtliga knappar vi vill spegla.
+
+    Filtrerar bort syskonnoder med samma vendor och product men annat innehall
+    - Pro Controllern skapar till exempel "Pro Controller (IMU)" med gyro och
+    accelerometer men inga knappar, och den ar dessutom root-only.
+    """
+    buf = bytearray(1024 // 8)
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except OSError:
+        return False
+    try:
+        fcntl.ioctl(fd, EVIOCGBIT(EV_KEY, len(buf)), buf)
+    except OSError:
+        return False
+    finally:
+        os.close(fd)
+    return all(buf[c // 8] >> (c % 8) & 1 for c in codes)
+
+
+def find_source(spec):
+    """Originalets event-nod, eller None.
+
+    Bryggans egna enheter hoppas over: de har samma vendor och product och
+    skulle annars speglas i en loop. uinput lagger dem under
+    /devices/virtual/input/, medan bluetooth-enheter hamnar under
+    /devices/virtual/misc/uhid/ och USB-enheter under /devices/pci.../usb*.
+    """
+    vendor, product = spec["match"]
+    codes = [src for src, _ in spec["buttons"]]
+    for entry in sorted(os.listdir("/sys/class/input")):
+        if not entry.startswith("event"):
+            continue
+        if "/virtual/input/" in os.path.realpath(f"/sys/class/input/{entry}"):
+            continue
+        base = f"/sys/class/input/{entry}/device/id"
+        try:
+            with open(f"{base}/vendor") as f:
+                v = int(f.read().strip(), 16)
+            with open(f"{base}/product") as f:
+                p = int(f.read().strip(), 16)
+        except OSError:
+            continue
+        if (v, p) != (vendor, product):
+            continue
+        node = f"/dev/input/{entry}"
+        if has_all_buttons(node, codes):
+            return node
+    return None
+
+
+def open_uinput(spec, src_fd):
+    fd = os.open("/dev/uinput", os.O_WRONLY | os.O_NONBLOCK)
+    for ev in (EV_KEY, EV_ABS):
+        fcntl.ioctl(fd, UI_SET_EVBIT, ev)
+    for _, dst in spec["buttons"]:
+        fcntl.ioctl(fd, UI_SET_KEYBIT, dst)
+    for axis in spec["axes"] + spec["extra_axes"] + spec["hats"]:
+        fcntl.ioctl(fd, UI_SET_ABSBIT, axis)
+
+    if spec["axis_range"]:
+        ranges = {a: spec["axis_range"] for a in spec["axes"] + spec["extra_axes"]}
+    else:
+        ranges = {}
+        for axis in spec["axes"] + spec["extra_axes"]:
+            info = axis_info(src_fd, axis)
+            ranges[axis] = (info[1], info[2]) if info else (-32767, 32767)
+
+    vendor, product = spec["match"]
+    dev = bytearray(spec["name"].ljust(80, b"\0"))
+    dev += struct.pack("HHHH", BUS_VIRTUAL, vendor, product, spec["version"])
+    dev += struct.pack("I", 0)                      # ff_effects_max
+    for table in ("absmax", "absmin", "absfuzz", "absflat"):
+        vals = [0] * ABS_CNT
+        for axis, (lo, hi) in ranges.items():
+            vals[axis] = {"absmax": hi, "absmin": lo}.get(table, 0)
+        for axis in spec["hats"]:
+            vals[axis] = {"absmax": 1, "absmin": -1}.get(table, 0)
+        dev += struct.pack(f"{ABS_CNT}i", *vals)
+
+    os.write(fd, bytes(dev))
+    fcntl.ioctl(fd, UI_DEV_CREATE)
+    return fd
+
+
+def emit(fd, etype, code, value):
+    os.write(fd, struct.pack(EVENT_FMT, 0, 0, etype, code, value))
+
+
+def shape(value, mid, reach, dz, curve):
+    """Dodzon och responskurva.
+
+    curve = 1.0 ar rakt av. Hogre varde gor rorelsen mjukare nara mitten utan
+    att sanka maxutslaget:
+
+        curve 2.0:  halva spaken -> en fjardedel av utslaget
+                    hela spaken  -> helt utslag
+
+    Det behovs for att en spak har kanske 20 mm att fordela rorelsen pa medan
+    en ratt har 900 grader. Att i stallet sanka sensitivity i spelet skulle
+    sanka aven maxutslaget, sa att fullt rattutslag inte langre gar att na.
+    """
+    value = deadzone(value, mid, reach, dz)
+    if curve == 1.0 or value == mid:
+        return value
+    offset = value - mid
+    norm = min(abs(offset) / reach, 1.0) ** curve
+    return mid + int(round(norm * reach * (1 if offset > 0 else -1)))
+
+
+def deadzone(value, mid, reach, dz):
+    """Dodzon med omskalning.
+
+    Allt inom dz av mitten blir mitten, och resten skalas om sa att rorelsen
+    borjar pa noll vid troskelns kant i stallet for att hoppa dit:
+
+        |v| <  dz  ->  0
+        |v| >= dz  ->  tecken(v) * (|v| - dz) / (1 - dz) * reach
+
+    Utan omskalningen far man en dod zon och sedan ett ryck: i samma ogonblick
+    som spaken passerar troskeln hoppar utslaget till dz av fullt varde.
+    """
+    if dz <= 0:
+        return value
+    offset = value - mid
+    limit = reach * dz
+    if abs(offset) < limit:
+        return mid
+    scaled = (abs(offset) - limit) / (reach - limit) * reach
+    return mid + int(round(scaled if offset > 0 else -scaled))
+
+
+def apply_deadzone(spec, axis, value, lo, hi):
+    """Dodzon utifran en axels omrade."""
+    return deadzone(value, (lo + hi) // 2, (hi - lo) / 2, spec.get("deadzone", 0.0))
+
+
+def centre(spec, dst, src_fd):
+    """En uinput-enhet startar med alla axlar pa 0. Ligger 0 utanfor axelns
+    omrade laser spelet det som FULLT UTSLAG, och en axel som aldrig rors
+    stannar dar. Det gav konstant insignal vid varje spelstart - figuren gick
+    i sidled av sig sjalv tills man rakade rora just den axeln.
+
+    Darfor skickas ett varde for varje axel direkt efter UI_DEV_CREATE,
+    hamtat fran originalet sa att bryggan startar dar enheten verkligen star.
+    """
+    lo, hi = spec["axis_range"] or (None, None)
+    for axis in spec["axes"]:
+        info = axis_info(src_fd, axis)
+        if info is None:
+            continue
+        value, amin, amax = info
+        if spec["axis_range"]:
+            amin, amax = lo, hi
+        if not amin <= value <= amax:
+            value = (amin + amax) // 2
+        emit(dst, EV_ABS, axis, apply_deadzone(spec, axis, value, amin, amax))
+    for axis in spec["extra_axes"]:                 # aldrig driven, parkeras i mitten
+        amin, amax = spec["axis_range"] or (0, 0)
+        emit(dst, EV_ABS, axis, (amin + amax) // 2)
+    for axis in spec["hats"]:
+        emit(dst, EV_ABS, axis, 0)
+    emit(dst, EV_SYN, SYN_REPORT, 0)
+
+
+class Mirror:
+    def __init__(self, spec, path):
+        self.spec = spec
+        self.path = path
+        self.remap = dict(spec["buttons"])
+        self.axes = set(spec["axes"]) | set(spec["hats"])
+        # Mitt och troskel per axel, for dodzonen. Hattarna hoppas over - de ar
+        # tresteg och har ingen mitt att glida ifran.
+        self.centre_of = {}
+        dz = spec.get("deadzone", 0.0)
+        if dz > 0:
+            for axis in spec["axes"]:
+                lo, hi = spec["axis_range"] or (None, None)
+                if lo is None:
+                    info = axis_info_path(path, axis)
+                    if info is None:
+                        continue
+                    lo, hi = info[1], info[2]
+                self.centre_of[axis] = ((lo + hi) // 2, (hi - lo) / 2, dz,
+                                        spec.get("curve", 1.0))
+        self.src = os.open(path, os.O_RDONLY)
+        try:
+            self.dst = open_uinput(spec, self.src)
+            centre(spec, self.dst, self.src)
+        except Exception:
+            os.close(self.src)
+            raise
+        print(f"{spec['id']}: speglar {path} -> uinput-joystick, "
+              f"{len(spec['axes']) + len(spec['extra_axes'])} axlar, "
+              f"{len(spec['buttons'])} knappar", flush=True)
+        if spec.get("deadzone", 0.0) > 0:
+            if self.centre_of:
+                trosklar = ", ".join(
+                    f"axel {a}: +-{int(reach * dz)}"
+                    for a, (mid, reach, dz, curve) in sorted(self.centre_of.items()))
+                print(f"{spec['id']}: dodzon {spec['deadzone']} kurva "
+                      f"{spec.get('curve', 1.0)} -> {trosklar}", flush=True)
+            else:
+                print(f"{spec['id']}: VARNING dodzon {spec['deadzone']} begard "
+                      f"men ingen troskel kunde beraknas", flush=True)
+
+    def pump(self):
+        """Returnerar False nar originalet forsvunnit."""
+        try:
+            data = os.read(self.src, EVENT_SIZE * 64)
+        except OSError:
+            return False
+        if not data:
+            return False
+        dirty = False
+        for i in range(0, len(data) - EVENT_SIZE + 1, EVENT_SIZE):
+            _, _, etype, code, value = struct.unpack(
+                EVENT_FMT, data[i:i + EVENT_SIZE])
+            if etype == EV_KEY and code in self.remap:
+                emit(self.dst, EV_KEY, self.remap[code], value)
+                dirty = True
+            elif etype == EV_ABS and code in self.axes:
+                cz = self.centre_of.get(code)
+                if cz is not None:
+                    value = shape(value, cz[0], cz[1], cz[2], cz[3])
+                emit(self.dst, EV_ABS, code, value)
+                dirty = True
+        if dirty:
+            emit(self.dst, EV_SYN, SYN_REPORT, 0)
+        return True
+
+    def close(self):
+        try:
+            fcntl.ioctl(self.dst, UI_DEV_DESTROY)
+        except OSError:
+            pass
+        for fd in (self.dst, self.src):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        print(f"{self.spec['id']}: originalet forsvann", flush=True)
+
+
+def main():
+    wanted = sys.argv[1:]
+    specs = [s for s in DEVICES if not wanted or s["id"] in wanted]
+    unknown = set(wanted) - {s["id"] for s in DEVICES}
+    if unknown:
+        print(f"okand enhet: {', '.join(sorted(unknown))}", file=sys.stderr)
+        print(f"kanda: {', '.join(s['id'] for s in DEVICES)}", file=sys.stderr)
+        return 2
+
+    mirrors = {}
+    next_scan = 0.0
+    while True:
+        now = time.monotonic()
+        if now >= next_scan:
+            next_scan = now + RESCAN_SECONDS
+            for spec in specs:
+                if spec["id"] in mirrors:
+                    continue
+                path = find_source(spec)
+                if not path:
+                    continue
+                try:
+                    mirrors[spec["id"]] = Mirror(spec, path)
+                except OSError as exc:
+                    print(f"{spec['id']}: {exc}", file=sys.stderr, flush=True)
+
+        if not mirrors:
+            time.sleep(1)
+            continue
+
+        fds = {m.src: key for key, m in mirrors.items()}
+        ready, _, _ = select.select(list(fds), [], [], 1.0)
+        for fd in ready:
+            key = fds[fd]
+            if not mirrors[key].pump():
+                mirrors.pop(key).close()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

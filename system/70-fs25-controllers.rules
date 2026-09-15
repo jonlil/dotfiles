@@ -1,0 +1,73 @@
+# Döljer FYSISKA handkontroller för Wine, så att scripts/joystick-bridge
+# virtuella motsvarigheter används i stället. Se system/gaming.md för varför.
+#
+# ## Kort version
+#
+# FS25 identifierar handkontroller via shared/inputDevices/*.xml. Ingen av de 72
+# definitionsfilerna har `xinput` bland sina backends - enumereringen sker via
+# RawInput. En enhet som Wine klassar som XInput-gamepad matchar därför ingen
+# definition och faller igenom till Xbox-layouten med elva knappar.
+#
+# Bryggan skapar en virtuell enhet som Wine klassar som joystick i stället.
+# Den måste ha samma vendor, product och version som originalet för att matcha
+# spelets <productKey>, och två enheter med samma id kolliderar i Wine - den
+# fysiska vinner, eftersom den har en hidraw-nod med enhetens äkta
+# HID-deskriptor. Därför måste originalet göras oläsbart för Wine.
+#
+# Att bara ta bort ID_INPUT_JOYSTICK räcker inte: lnxev_device_create() har
+# inget taggfilter alls, utan skapar en HID-enhet för varje nod i
+# input-subsystemet och hoppar över den först om open() misslyckas.
+#
+# ## Tre fällor
+#
+# Filnamnet måste sortera FÖRE 73-seat-late.rules, som kör uaccess-builtinen:
+#     TAG=="uaccess|xaccess-*", ENV{MAJOR}!="", RUN{builtin}+="uaccess"
+# Heter regeln 99-* har builtinen redan kört och TAG-="uaccess" kommer för sent.
+#
+# DEVPATH!="*/virtual/input/*" undantar bryggans EGNA enheter, som har samma
+# vendor och product. uinput lägger dem under /devices/virtual/input/, medan
+# bluetooth-enheter hamnar under /devices/virtual/misc/uhid/ och USB-enheter
+# under /devices/pci*/usb*. Uppmätt:
+#     fysisk USB  /devices/pci0000:80/.../0003:057E:2009.0030/input/input109/event258
+#     fysisk BT   /devices/virtual/misc/uhid/0005:057E:2009.0028/input/input90/event31
+#     bryggans    /devices/virtual/input/input113/event30
+#
+# Matchningen sker på KERNELS och inte på ATTRS{id/vendor}. Attributen sitter på
+# en förälder som inte alltid hunnit dyka upp när noden skapas - för uhid-enheter
+# som bluez skapar (Bluetooth) förlorar regeln den kapplöpningen, och enheten
+# blir kvar med udevs standardrättigheter. Samma enhet på USB fungerade, vilket
+# gjorde felet svårt att se.
+#
+# KERNELS-strängen är däremot en del av sökvägen själv och finns direkt. Den
+# innehåller dessutom bussprefixet, så globen täcker båda: 0003 är USB, 0005 är
+# Bluetooth. OBS versaler - KERNELS ger "057E", inte "057e".
+#
+# ## Verifiera
+#
+#     getfacl /dev/input/eventN
+# ACL-posten för användaren får finnas kvar, men mask:: måste vara ---
+# (MODE="0600" nollställer masken), så att den står som #effective:---
+#
+# ## Kostnad
+#
+# En dold enhet är dold för ALLT, inte bara för Wine - Steam, andra spel och
+# skrivbordet ser den inte heller. För sidopanelen spelar det ingen roll, den
+# används bara i FS25. För Pro Controllern är det ett medvetet val: priset för
+# att spelet ska visa Nintendos knappetiketter i stället för Xbox.
+
+# --- Saitek Heavy Equipment Side Panel -------------------------------------
+SUBSYSTEM=="input", KERNEL=="event*|js*", DEVPATH!="*/virtual/input/*", \
+  KERNELS=="000?:0738:2218.*", \
+  TAG-="uaccess", MODE="0600", OWNER="root"
+
+SUBSYSTEM=="hidraw", KERNELS=="000?:0738:2218.*", \
+  TAG-="uaccess", MODE="0600", OWNER="root"
+
+# --- Nintendo Switch Pro Controller ----------------------------------------
+# Glob på bussprefixet gör regeln bussoberoende: 0003 är USB, 0005 Bluetooth.
+SUBSYSTEM=="input", KERNEL=="event*|js*", DEVPATH!="*/virtual/input/*", \
+  KERNELS=="000?:057E:2009.*", \
+  TAG-="uaccess", MODE="0600", OWNER="root"
+
+SUBSYSTEM=="hidraw", KERNELS=="000?:057E:2009.*", \
+  TAG-="uaccess", MODE="0600", OWNER="root"

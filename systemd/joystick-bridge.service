@@ -1,0 +1,33 @@
+[Unit]
+# Kör scripts/joystick-bridge, som speglar handkontroller till virtuella
+# joysticks så att FS25 matchar dem mot sina egna enhetsdefinitioner i stället
+# för att ta emot dem som generiska XInput-gamepads.
+#
+# Se system/gaming.md för bakgrunden och skriptets docstring för mekaniken.
+Description=Virtuella joysticks för Farming Simulator
+Documentation=file:/usr/local/bin/joystick-bridge
+
+[Service]
+Type=simple
+
+# Sökvägen är avsiktligt /usr/local/bin och inte hemkatalogen: tjänsten körs som
+# root, och en hårdkodad /home/<namn> gör repot obrukbart för andra. install.sh
+# skriver ut kommandot som länkar skriptet dit.
+ExecStart=/usr/local/bin/joystick-bridge
+
+# SYSTEMTJÄNST, inte användartjänst. De fysiska enheterna är root-only via
+# system/70-fs25-controllers.rules - annars kan Wine öppna dem och kollidera
+# med bryggans virtuella, som har samma vendor och product. Därför måste
+# bryggan köras som root för att komma åt originalen.
+User=root
+
+# Skriptet söker själv efter enheter var femte sekund och avslutar inte när de
+# saknas, så Restart behövs bara om det kraschar. Därför inte den snabba
+# polling-omstart som en tidigare version använde.
+Restart=on-failure
+RestartSec=10
+
+Nice=-5
+
+[Install]
+WantedBy=multi-user.target

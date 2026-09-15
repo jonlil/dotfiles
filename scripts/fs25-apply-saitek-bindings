@@ -1,0 +1,449 @@
+#!/usr/bin/env python3
+"""Skriver in FS25:s egen standardprofil för Saitek-ratten + sidopanelen i
+spelets inputBinding.xml, med rätt enhets-id.
+
+## Varför det behövs
+
+FS25 levererar en komplett officiell profil för exakt den här kombinationen:
+
+    profileTemplate/inputBindingDefault_SaitekWheelAndPanel.xml
+    291 bindningar, varav 88 för panelen
+
+Men mallen läggs bara på när inputBinding.xml SKAPAS första gången. Fanns filen
+redan när panelen dök upp - till exempel för att den skapades när bara ratten
+och en XInput-gamepad syntes - får panelen inga bindningar alls, och man får
+binda 28 knappar för hand i menyn. Det här skriptet lägger på mallen i
+efterhand.
+
+## Enhets-id
+
+Spelet adresserar enheter med
+    0_<vid>-<pid>-<version>-<base64 av HID-symlanken>
+till exempel
+    0_0738-2218-0110-XFw/XEhJRCNWSURfMDczOCZQSURfMjIxOCMy...
+
+Symlanken läses ur prefixets register i stället för att konstrueras, så att
+id:t stämmer även om Wine skulle numrera om enheten:
+
+    [System\\ControlSet001\\Control\\DeviceClasses\\{4D1E55B2-...}\\##?#HID#VID_0738&PID_2218#...]
+    "SymbolicLink"="\\\\?\\HID#VID_0738&PID_2218#272&0000FFFFFFFF22180738&0&0&0#{4D1E55B2-...}"
+
+Den strängen, plus en avslutande nollbyte, är vad som base64-kodas.
+
+## Överlägget
+
+--overlay lägger fyra rättelser ovanpå den officiella profilen, motiverade i
+system/fs25-saitek-panel-bindings.md:
+
+    spakens vrid  ->  bommen in/ut (AXIS_CRANE_ARM2, som GIANTS lämnar obunden)
+    knapp 22/24   ->  rotera gripen, som flyttas dit från vridet
+    knapp 2       ->  Meny: OK, som låg på BUTTON_32 - en knapp som inte finns
+    knapp 6       ->  Tippa, som inte var bunden alls, i stället för butiken
+
+Utan flaggan skrivs enbart den officiella profilen, oförändrad.
+"""
+
+import argparse
+import base64
+import os
+import pathlib
+import re
+import shutil
+import sys
+import time
+import xml.etree.ElementTree as ET
+
+APPID = "2300320"
+DOCS = "My Games/FarmingSimulator2025"
+
+# Steam-biblioteket ligger inte pa samma stalle hos alla. Satt FS25_GAME och
+# FS25_PFX i miljon for att peka ut dem, annars letas de upp bland de vanliga
+# biblioteksplatserna.
+LIBRARIES = [
+    pathlib.Path.home() / ".local/share/Steam/steamapps",
+    pathlib.Path.home() / ".steam/steam/steamapps",
+    pathlib.Path("/var/lib/games/steamapps"),
+]
+
+
+def find_game():
+    if os.environ.get("FS25_GAME"):
+        return pathlib.Path(os.environ["FS25_GAME"])
+    for lib in LIBRARIES:
+        p = lib / "common/Farming Simulator 25"
+        if p.is_dir():
+            return p
+    raise SystemExit("hittar inte spelet - satt FS25_GAME till dess katalog")
+
+
+def find_pfx():
+    if os.environ.get("FS25_PFX"):
+        return pathlib.Path(os.environ["FS25_PFX"])
+    for lib in LIBRARIES:
+        p = lib / f"compatdata/{APPID}/pfx"
+        if p.is_dir():
+            return p
+    raise SystemExit("hittar inte Proton-prefixet - satt FS25_PFX till dess katalog")
+
+
+GAME = find_game()
+PFX = find_pfx()
+
+# Spelets egna standardprofiler. Varje mall kopplar generiska enhetsnamn till
+# riktiga enheter; wheel+panel har sina egna id, gamepaden ett fast.
+TEMPLATES = [
+    ("inputBindingDefault_SaitekWheelAndPanel.xml", {
+        "FARM_WHEEL_DEFAULT": (0x0738, 0x2217),
+        "PANEL_DEFAULT": (0x0738, 0x2218),
+    }),
+    # Pro Controllern matchar NintendoSwitchProController.xml, som deklarerar
+    # <category>gamepad</category> - alltsa samma bindningar som en vanlig
+    # gamepad, men med Nintendos knappetiketter. Versionen (0x8001) ingar i
+    # enhets-id:t och maste anges.
+    #
+    # Kommer kontrollen in via XInput i stallet - for att bryggan inte kor
+    # eller regeln inte ar installerad - heter enheten "0_XINPUT_GAMEPAD".
+    # Byt raden nedan mot det om du vill ga tillbaka dit.
+    ("inputBindingDefault_Gamepad.xml", {
+        "GAMEPAD_DEFAULT": (0x057E, 0x2009, 0x8001),
+    }),
+]
+
+# Forbattringar ovanpa den officiella profilen. Se
+# system/fs25-saitek-panel-bindings.md for motiveringen bakom varje rad.
+#
+# Den officiella profilen anvander ALLA 28 knappar, och anvander dem bra.
+# Det gar darfor inte att lagga till nagot utan att offra nagot.
+#
+# INGEN MODIFIERARE. Ett skiftlager provades och forkastades: skiftknappen
+# skulle behova sitta bredvid spaken, inte pa den, och handen som halls pa
+# spaken kan da inte na den medan andra handen ar pa ratten.
+#
+# I stallet foljs profilens eget idiom - en axelfunktion far bindas till ett
+# par vanliga knappar. GIANTS gor redan sa pa panelen:
+#     AXIS_CRANE_TOOL       BUTTON_23 (+)  BUTTON_28 (-)
+#     AXIS_CRUISE_CONTROL   BUTTON_26 (+)  BUTTON_27 (-)
+#
+# ## Kranen
+#
+# Spelets egna iconName i fordonsfilerna ar entydiga over 40 kranfordon:
+#     AXIS_CRANE_ARM    svang kranen i sidled   CRANE_ARM1_ROTATE_Y
+#     AXIS_CRANE_ARM2   bommen IN / UT          CRANE_EC_TRANSLATE_Z
+#     AXIS_CRANE_ARM3   bommen UPP / NER        CRANE_EC_TRANSLATE_Y
+#     AXIS_CRANE_ARM4   teleskopet              CRANE_ARM2_TRANSLATE
+#     AXIS_CRANE_TOOL   gripen oppna/stang      GRABBER_OPEN_CLOSE
+#     AXIS_CRANE_TOOL2  rotera gripen           GRABBER_ROTATE_Y
+#
+# Kranen har fyra rorelser, spaken tre axlar. GIANTS lamnar ARM2 - bommen in
+# och ut - helt obunden, vilket ar den rorelse som vavs in i varje lyft. Hori
+# gjorde tvartom pa sin egen panel och offrade upp/ner i stallet.
+#
+# Har flyttas i stallet ROTERA GRIPEN till knappar. Alla tre bomrorelser blir
+# proportionella pa spaken, och gripens rotation - som man staller in en gang
+# for att rikta in mot stocken och sedan lamnar - tal konstant hastighet.
+#
+#   (action, enhet, input, form)
+#     None    vanlig knapp
+#     "+"/"-" knapp som halva av ett axelpar
+#     "axis"  axel, inputComponent och axisComponent i takt
+REMOVE = [
+    # BUTTON_32 finns inte - panelen har 28 knappar, sa MENU_ACCEPT var
+    # obunden i praktiken och man kunde inte bekrafta i menyer fran panelen.
+    ("MENU_ACCEPT", "PANEL_DEFAULT", "BUTTON_32"),
+    # Butiken oppnar man sallan mitt i ett jobb; tippning var obunden.
+    ("TOGGLE_STORE", "PANEL_DEFAULT", "BUTTON_6"),
+    # Knapp 22 och 24 frigors at gripens rotation. Hjalptexten ligger kvar pa
+    # tangentbordets F1.
+    ("TOGGLE_HELP_TEXT", "PANEL_DEFAULT", "BUTTON_22"),
+    ("TOGGLE_MAP_SIZE", "PANEL_DEFAULT", "BUTTON_24"),
+    # Vridet byter betydelse fran gripens rotation till bommen in/ut.
+    # Frontlastaren pa samma axel lamnas orord.
+    ("AXIS_CRANE_TOOL2", "PANEL_DEFAULT", "AXIS_3"),
+
+    # Rosa blockets ovre rad frigors at redskapshanteringen. Alla tre finns pa
+    # tangentbordet, som star framfor panelen: Esc, 7 och 8.
+    #
+    # OBS: bara de har tre upptar faktiskt en knapp UNDER KORNING. MENU_BACK,
+    # MENU_ACCEPT och MENU_PAGE_* lever i menysammanhanget och krockar inte med
+    # nagot i fordonet - de lamnas kvar och kostar ingenting.
+    # Kameran. CAMERA_SWITCH (tangent C) finns pa Horis panel men utelamnades pa
+    # Saiteks. Den tar den cyanfargade vippan 18, dar "anstall forare" satt -
+    # den ligger kvar pa tangent H.
+    #
+    # Arbetsbelysning behover INGEN egen knapp: TOGGLE_LIGHTS pa knapp 11 stegar
+    # igenom ljuslagena inklusive arbetsbelysning fram och bak.
+    ("TOGGLE_AI", "PANEL_DEFAULT", "BUTTON_18"),
+
+    ("MENU", "PANEL_DEFAULT", "BUTTON_1"),
+    ("DECREASE_TIMESCALE", "PANEL_DEFAULT", "BUTTON_2"),
+    ("INCREASE_TIMESCALE", "PANEL_DEFAULT", "BUTTON_3"),
+    # --- Pro Controllern -----------------------------------------------------
+    # Gamepad-mallen ar skriven for en XInput-gamepad med ANALOGA avtryckare pa
+    # AXIS_11 och AXIS_12. Pro Controllern har digitala ZL och ZR, som
+    # NintendoSwitchProController.xml mappar till logisk 6 och 7 - alltsa
+    # BUTTON_7 och BUTTON_8. Axlarna finns inte, sa mallens bindningar dar blir
+    # tyst obundna: gas, broms, spring, kartzoom och menysidbyte.
+    ("AXIS_ACCELERATE_VEHICLE", "GAMEPAD_DEFAULT", "AXIS_11"),
+    ("AXIS_BRAKE_VEHICLE", "GAMEPAD_DEFAULT", "AXIS_12"),
+    ("AXIS_RUN", "GAMEPAD_DEFAULT", "AXIS_11"),
+    ("AXIS_MAP_ZOOM_IN", "GAMEPAD_DEFAULT", "AXIS_11"),
+    ("AXIS_MAP_ZOOM_OUT", "GAMEPAD_DEFAULT", "AXIS_12"),
+    ("MENU_LIST_PAGE_NEXT", "GAMEPAD_DEFAULT", "AXIS_11"),
+    ("MENU_LIST_PAGE_PREV", "GAMEPAD_DEFAULT", "AXIS_12"),
+    ("MENU_LIST_PAGE_END_GAMEPAD", "GAMEPAD_DEFAULT", "AXIS_11"),
+    ("MENU_LIST_PAGE_START_GAMEPAD", "GAMEPAD_DEFAULT", "AXIS_12"),
+    ("AXIS_CONSTRUCTION_CAMERA_ZOOM", "GAMEPAD_DEFAULT", "AXIS_11"),
+    ("AXIS_CONSTRUCTION_CAMERA_ZOOM", "GAMEPAD_DEFAULT", "AXIS_12"),
+]
+
+# Enhets-id som inte langre anvands men kan ligga kvar i filen. Deras
+# bindningar och <device>-block stads bort, annars visar spelet en spokkolumn
+# i kontrollmenyn for en enhet som inte finns.
+#
+# 0_XINPUT_GAMEPAD ar arvegods fran innan bryggan: bade sidopanelen och Pro
+# Controllern hamnade dar nar Wine klassade dem som XInput-gamepads.
+STALE_DEVICES = ["0_XINPUT_GAMEPAD"]
+
+# Namnet spelet visar i kontrollmenyn.
+DEVICE_NAMES = {"GAMEPAD_DEFAULT": "Pro Controller"}
+
+# Dodzoner per enhet. Spelet skapar <device>-blocken sjalvt nar det sparar, men
+# for en enhet det aldrig sett finns inget block - och da gar axlarna helt utan
+# dodzon, eftersom den globala i game.xml star pa 0.000000 (nollad for rattens
+# skull). Bryggans axlar vilar 1-3 % fran mitten, vilket da blev konstant
+# insignal: kameran snurrade och gick inte att styra.
+#
+#   namn                  kategori  axlar som far dodzon        varde
+DEVICE_ATTRS = {
+    "GAMEPAD_DEFAULT": (1, [0, 1, 2, 3, 10, 11], "0.140000"),
+}
+
+OVERLAY = [
+    ("MENU_ACCEPT", "PANEL_DEFAULT", "BUTTON_2", None),
+    ("TOGGLE_TIPSTATE", "PANEL_DEFAULT", "BUTTON_6", None),
+    ("AXIS_CRANE_ARM2", "PANEL_DEFAULT", "AXIS_3", "axis"),
+    ("AXIS_CRANE_TOOL2", "PANEL_DEFAULT", "BUTTON_22", "+"),
+    ("AXIS_CRANE_TOOL2", "PANEL_DEFAULT", "BUTTON_24", "-"),
+
+    # Pro Controllern: ZL = broms, ZR = gas, som det var via XInput.
+    ("AXIS_ACCELERATE_VEHICLE", "GAMEPAD_DEFAULT", "BUTTON_8", None),
+    ("AXIS_BRAKE_VEHICLE", "GAMEPAD_DEFAULT", "BUTTON_7", None),
+    ("AXIS_RUN", "GAMEPAD_DEFAULT", "BUTTON_8", None),
+    ("AXIS_MAP_ZOOM_IN", "GAMEPAD_DEFAULT", "BUTTON_8", None),
+    ("AXIS_MAP_ZOOM_OUT", "GAMEPAD_DEFAULT", "BUTTON_7", None),
+    ("MENU_LIST_PAGE_NEXT", "GAMEPAD_DEFAULT", "BUTTON_8", None),
+    ("MENU_LIST_PAGE_PREV", "GAMEPAD_DEFAULT", "BUTTON_7", None),
+
+    # Dubbla redskap. FS25 har par av funktioner - en for det VALDA redskapet
+    # och en for ALLA - men panelen hade bara valt-halvan:
+    #
+    #     V   sank/lyft valt      knapp 20      Ctrl+V  sank/lyft alla   saknades
+    #     B   sla pa/av valt      knapp 4       Ctrl+B  sla pa/av alla   saknades
+    #     X   fall valt           knapp 5       Ctrl+X  fall alla        saknades
+    #     G   byt valt redskap    knapp 21
+    #
+    # Med klippare fram och bak tvingade det en att vaxla med knapp 21 och
+    # upprepa allt. Nu ligger alla-varianterna pa rosa blockets ovre rad,
+    # direkt bredvid valt-varianterna pa orange 4 och 5.
+    ("LOWER_ALL_IMPLEMENTS", "PANEL_DEFAULT", "BUTTON_1", None),
+    ("TURN_ON_ALL_IMPLEMENTS", "PANEL_DEFAULT", "BUTTON_2", None),
+    ("FOLD_ALL_IMPLEMENTS", "PANEL_DEFAULT", "BUTTON_3", None),
+
+    # Byt kamera.
+    ("CAMERA_SWITCH", "PANEL_DEFAULT", "BUTTON_18", None),
+]
+
+
+def symbolic_link(vendor, product):
+    """Hamtar enhetens HID-symlank ur prefixets register."""
+    reg = (PFX / "system.reg").read_text(encoding="utf-8", errors="replace")
+    want = f"HID#VID_{vendor:04X}&PID_{product:04X}#"
+    found = []
+    for m in re.finditer(r'"SymbolicLink"="([^"]+)"', reg):
+        raw = m.group(1).replace("\\\\", "\\")
+        if want in raw:
+            found.append(raw)
+    if not found:
+        raise SystemExit(
+            f"hittar ingen registerpost for {vendor:04x}:{product:04x} i {PFX}.\n"
+            "starta spelet en gang med enheten inkopplad forst."
+        )
+    if len(set(found)) > 1:
+        raise SystemExit(
+            f"flera poster for {vendor:04x}:{product:04x} - spoken i registret.\n"
+            "kor scripts/wine-clean-ghost-devices forst:\n"
+            f"  wine-clean-ghost-devices {PFX} {vendor:04x}:{product:04x}"
+        )
+    return found[0]
+
+
+def device_id(vendor, product, version=0x0110):
+    link = symbolic_link(vendor, product)
+    blob = base64.b64encode(link.encode("ascii") + b"\0").decode("ascii")
+    return f"0_{vendor:04x}-{product:04x}-{version:04x}-{blob}"
+
+
+def template_bindings():
+    """Laser alla mallar -> {action: [(generiskt enhetsnamn, input, komp, komp)]}
+
+    Mallarna slas ihop. Samma action kan forekomma i flera - ratten och panelen
+    i den ena, gamepaden i den andra - och raderna laggs da bredvid varandra.
+    """
+    out = {}
+    for name, _ in TEMPLATES:
+        root = ET.parse(GAME / "profileTemplate" / name).getroot()
+        for ab in root.findall("actionBinding"):
+            rows = out.setdefault(ab.get("action"), [])
+            for b in ab.findall("binding"):
+                rows.append((b.get("device"), b.get("input"),
+                             b.get("inputComponent"), b.get("axisComponent")))
+    return out
+
+
+def apply_overlay(actions):
+    for action, dev, inp in REMOVE:
+        rows = actions.get(action)
+        if rows is None:
+            raise SystemExit(f"overlay: {action} finns inte i mallarna")
+        before = len(rows)
+        rows[:] = [r for r in rows if not (r[0] == dev and r[1] == inp)]
+        if len(rows) == before:
+            raise SystemExit(f"overlay: {action} hade ingen bindning pa {inp} "
+                             f"for {dev} - mallen har andrats, se over REMOVE")
+
+    for action, dev, inp, form in OVERLAY:
+        rows = actions.setdefault(action, [])
+        rows[:] = [r for r in rows if not (r[0] == dev and r[1] == inp)]
+        if form == "axis":
+            rows.append((dev, inp, "+", "+"))
+            rows.append((dev, inp, "-", "-"))
+        elif form in ("+", "-"):
+            rows.append((dev, inp, None, form))
+        else:
+            rows.append((dev, inp, None, None))
+    return actions
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--overlay", action="store_true",
+                    help="lagg till forbattringarna ovanpa den officiella profilen")
+    ap.add_argument("--dry-run", action="store_true")
+    args = ap.parse_args()
+
+    target = PFX / "drive_c/users/steamuser/Documents" / DOCS / "inputBinding.xml"
+    if not target.exists():
+        raise SystemExit(f"hittar inte {target}")
+
+    # Generiskt mallnamn -> verkligt enhets-id. Ratten och panelen far sitt id
+    # harlett ur prefixets register; gamepaden har ett fast, vilket ocksa ar
+    # skalet till att den ar bussoberoende - samma id pa USB som pa Bluetooth.
+    ids = {}
+    for _, mapping in TEMPLATES:
+        for name, target_id in mapping.items():
+            ids[name] = target_id if isinstance(target_id, str) else device_id(*target_id)
+    for name, did in ids.items():
+        print(f"  {name:20} -> {did[:34]}{'...' if len(did) > 34 else ''}")
+
+    actions = template_bindings()
+    if args.overlay:
+        actions = apply_overlay(actions)
+
+    text = target.read_text(encoding="utf-8-sig")
+    root = ET.fromstring(text)
+
+    existing = {ab.get("action"): ab for ab in root.findall("actionBinding")}
+    added = dropped = 0
+
+    # Rensa ALLA bindningar for de enheter vi ar pa vag att skriva, i hela
+    # tradet - inte bara i de actions mallarna namner. Annars blir korningen
+    # inte idempotent: bindningar som funnits tidigare men inte langre star i
+    # mallen skulle ligga kvar och skugga de nya. Tangentbord och mus ror vi
+    # aldrig.
+    owned = set(ids.values()) | set(STALE_DEVICES)
+    for ab in root.findall("actionBinding"):
+        for b in list(ab.findall("binding")):
+            if b.get("device") in owned:
+                ab.remove(b)
+                dropped += 1
+
+    # ... och sjalva <device>-blocken for de utgangna enheterna.
+    for parent in root.iter():
+        for d in list(parent.findall("device")):
+            if d.get("id") in STALE_DEVICES:
+                parent.remove(d)
+
+    for action, rows in actions.items():
+        ab = existing.get(action)
+        if ab is None:
+            ab = ET.SubElement(root, "actionBinding")
+            ab.set("action", action)
+            existing[action] = ab
+        # index = slotnummer per enhet inom denna action; ett +/- -par delar slot
+        slots = {}
+        for dev, inp, icomp, acomp in rows:
+            did = ids.get(dev)
+            if did is None:
+                continue
+            key = (did, inp)
+            if key not in slots:
+                slots[key] = len({k for k in slots if k[0] == did}) + 1
+            b = ET.SubElement(ab, "binding")
+            b.set("device", did)
+            b.set("input", inp + (icomp or ""))
+            b.set("axisComponent", acomp or "+")
+            b.set("neutralInput", "0")
+            b.set("index", str(slots[key]))
+            added += 1
+
+    # Enhetsblock med dodzoner for de enheter som behover ett.
+    devices = root.find("devices")
+    if devices is None:
+        devices = ET.SubElement(root, "devices")
+    for name, (category, axes, deadzone) in DEVICE_ATTRS.items():
+        did = ids.get(name)
+        if did is None:
+            continue
+        for d in list(devices.findall("device")):
+            if d.get("id") == did:
+                devices.remove(d)
+        d = ET.SubElement(devices, "device")
+        d.set("id", did)
+        d.set("name", DEVICE_NAMES.get(name, name))
+        d.set("category", str(category))
+        for axis in axes:
+            a = ET.SubElement(d, "attributes")
+            a.set("axis", str(axis))
+            a.set("deadzone", deadzone)
+            a.set("sensitivity", "1.000000")
+        print(f"  dodzon {deadzone} satt pa {len(axes)} axlar for {name}")
+
+    ET.indent(root, space="    ")
+    out = '<?xml version="1.0" encoding="utf-8" standalone="no" ?>\n' + \
+        ET.tostring(root, encoding="unicode") + "\n"
+
+    per_device = {}
+    for ab in root.findall("actionBinding"):
+        for b in ab.findall("binding"):
+            if b.get("device") in set(ids.values()):
+                per_device[b.get("device")] = per_device.get(b.get("device"), 0) + 1
+    label = {v: k for k, v in ids.items()}
+    print(f"\n  {dropped} gamla bindningar rensade, {added} skrivna:")
+    for did, n in sorted(per_device.items(), key=lambda kv: -kv[1]):
+        print(f"    {n:4}  {label.get(did, did)[:28]}")
+
+    if args.dry_run:
+        print("\n  --dry-run, inget skrivet")
+        return 0
+
+    backup = target.with_suffix(f".xml.bak-{time.strftime('%Y%m%d-%H%M%S')}")
+    shutil.copy2(target, backup)
+    target.write_text(out, encoding="utf-8")
+    print(f"\n  skrivet till {target}")
+    print(f"  backup       {backup}")
+    print("\n  spelet maste vara STANGT nar det har kors.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

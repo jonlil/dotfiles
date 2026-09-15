@@ -1,0 +1,36 @@
+# Flyttar axelområdet på Saiteks Farm Sim-prylar från 0..255 till 1..255, så
+# att mittpunkten hamnar på 128 istället för 127,5.
+#
+# Axlarna är 8-bitars med ett jämnt antal värden (se `15 00 26 ff 00` i
+# report_descriptor), så mitten 127,5 finns inte som rapporterbart värde.
+# Spaken vilar på 128 och ligger därför alltid ett halvt steg fel. Med dödzonen
+# nollad blir det halva steget en konstant insignal varje bildruta: kameran
+# gled oavbrutet och traktorn drog åt höger.
+#
+# Uppmätt: noll axelevents på 30 sekunder med spaken orörd. Alltså inget
+# elektriskt brus - enbart det statiska halvsteget.
+#
+# Med 1..255 blir mitten exakt 128, viloläget blir noll på riktigt, och full
+# upplösning behålls ända in till centrum. Alternativet var några procents
+# dödzon, vilket hade dolt symptomet men ätit av rörelsen i onödan.
+#
+# Verifierat att FS25 respekterar min/max. Notera att samma spel ignorerar
+# `flat` fullständigt - en dödzon satt via evdev får ingen effekt alls, den
+# måste sättas i spelets egen meny.
+#
+# Kräver linuxconsole (evdev-joystick). Värdena återställs vid varje
+# inkoppling och enhetssökvägen ändras mellan gånger, därför en regel och
+# inte ett engångskommando.
+
+# Sidopanelen: alla sex axlar hör till kranspaken och behöver en äkta mitt.
+# Lägesomkopplaren växlar mellan X/Y/Z (blått) och RX/RY/RZ (rött).
+ACTION=="add", SUBSYSTEM=="input", KERNEL=="event*", \
+  ENV{ID_VENDOR_ID}=="0738", ENV{ID_MODEL_ID}=="2218", ENV{ID_INPUT_JOYSTICK}=="1", \
+  RUN+="/usr/bin/evdev-joystick --evdev /dev/input/%k --minimum 1 --maximum 255"
+
+# Ratten: bara styraxeln (axel 0). Pedalaxlarna vilar i ett ändläge och inte i
+# mitten, så där skulle en flytt av området bara klippa ett steg i kanten utan
+# att lösa någonting.
+ACTION=="add", SUBSYSTEM=="input", KERNEL=="event*", \
+  ENV{ID_VENDOR_ID}=="0738", ENV{ID_MODEL_ID}=="2217", ENV{ID_INPUT_JOYSTICK}=="1", \
+  RUN+="/usr/bin/evdev-joystick --evdev /dev/input/%k --minimum 1 --maximum 255 --axis 0"
