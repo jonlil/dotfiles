@@ -1,32 +1,52 @@
 #!/bin/sh
 # Genererar bakgrunden till låsskärmen (hypr/lockscreen.jpg).
 #
-#   gen-lockscreen-bg            # sval palett (blue, mauve, teal) - den som används
-#   gen-lockscreen-bg karamell   # varm palett (peach, flamingo, yellow)
-#   gen-lockscreen-bg sval /tmp/test.jpg
+#   gen-lockscreen-bg                        # sval palett (blue, mauve, teal) - den som används
+#   gen-lockscreen-bg karamell               # varm palett (peach, flamingo, yellow)
+#   gen-lockscreen-bg sval /tmp/test.jpg     # egen utfil
+#   BREDD=1920 HOJD=1080 gen-lockscreen-bg   # annan skärm än laptopens 2560x1600
 #
 # Mesh-gradient i Catppuccin Mocha: färgade cirklar ritas på en liten canvas,
 # blurras sönder till mjuka fält och skalas upp. Att rita smått och skala upp
 # är poängen - en blur på 2560x1600 direkt tar evigheter och ger inte mjukare
 # övergångar.
 #
+# Basen är FÄRGAD, inte nästan svart. Med en mörk bas lyser den igenom i glappen
+# mellan fälten, och eftersom en mättad färg passerar gråa mellanlägen på vägen
+# ner mot svart läser ögat det som en grå platta bakom gradienten. Mörkret som
+# klockan och lösenordsrutan behöver läggs i stället tillbaka efteråt, som en
+# vinjett i mitten. Då blir glappen färg och mitten ändå läsbar.
+#
 # Tre saker är intrimmade och tål inte att ändras vårdslöst:
-#   - Basen är nästan svart. Ljusare än så dränks bilden där fälten överlappar,
-#     och den varma paletten tippar över i mangosmoothie.
-#   - Radierna håller fälten isär så mitten förblir mörk - där står klockan och
-#     lösenordsrutan, och de måste gå att läsa.
-#   - Mättnaden håller pastellerna krämiga. Över ~140 blir de neon; under ~105
+#   - Vinjettens opacitet. Under ~0.60 dränks lösenordsrutan i färg; över ~0.80
+#     är den grå plattan tillbaka, fast rund.
+#   - Radierna håller fälten isär, så vinjetten har något att mörkna mot.
+#   - Mättnaden håller pastellerna krämiga. Över ~150 blir de neon; under ~105
 #     blir de ljusaste färgerna gråa i stället för mjuka.
+#
+# Loggan komponeras in EFTER uppskalningen - läggs den in före mjukar blurren
+# upp den. Den rastreras ur SVG:n i 600 dpi och skalas ner till sin slutstorlek,
+# vilket ger skarpa kanter. Saknas filen hoppas steget över.
 #
 # Bruset är slumpmässigt, så varje körning ger en unik variant.
 set -e
 
 PALETT="${1:-sval}"
-OUT="${2:-$(dirname "$0")/../hypr/lockscreen.jpg}"
+# readlink -f löser symlänken: install.sh länkar skriptet till ~/.local/bin, och
+# utan det pekar ../hypr på ~/.local/hypr i stället för på repot.
+HAR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+OUT="${2:-$HAR/../hypr/lockscreen.jpg}"
 
+BREDD="${BREDD:-2560}"
+HOJD="${HOJD:-1600}"
+VINJETT="${VINJETT:-0.72}"
+LOGGA="${LOGGA:-$HAR/../hypr/devbox-logo.svg}"
+LOGGA_HOJD="${LOGGA_HOJD:-200}"
+
+# Cirklarna ritas i 1280x800 och skalas till målupplösningen på slutet.
 case "$PALETT" in
   sval)
-    BAS='#11111b'; MOD='66,145'
+    BAS='#2a2450'; MOD='66,145'
     set -- -fill '#89b4fa' -draw 'circle 250,220 250,470' \
            -fill '#cba6f7' -draw 'circle 980,180 980,400' \
            -fill '#94e2d5' -draw 'circle 640,700 640,860' \
@@ -34,9 +54,9 @@ case "$PALETT" in
            -fill '#74c7ec' -draw 'circle 120,760 120,880'
     ;;
   karamell)
-    # Varmare bas: med ren #11111b blir glappen mellan de varma fälten
-    # gråbruna och smutsiga.
-    BAS='#1a1218'; MOD='64,112'
+    # Basen följer fältens temperatur. En kall bas under varma fält ger
+    # gråbruna glapp, precis det problem den färgade basen finns för att lösa.
+    BAS='#3a2440'; MOD='64,130'
     set -- -fill '#fab387' -draw 'circle 260,230 260,490' \
            -fill '#f2cdcd' -draw 'circle 990,190 990,420' \
            -fill '#f9e2af' -draw 'circle 620,690 620,880' \
@@ -49,9 +69,24 @@ esac
 
 magick -size 1280x800 xc:"$BAS" "$@" \
   -blur 0x115 \
-  -resize 2560x1600 \
+  -resize "${BREDD}x${HOJD}!" \
   -modulate "$MOD" \
+  \( -size "${BREDD}x${HOJD}" \
+     radial-gradient:"rgba(0,0,0,$VINJETT)-rgba(0,0,0,0)" \) -composite \
   -attenuate 0.3 +noise Gaussian \
   -quality 88 "$OUT"
 
-echo "Skrev $OUT ($PALETT, $(du -h "$OUT" | cut -f1))"
+if [ -f "$LOGGA" ]; then
+    TMP="$(mktemp --suffix=.png)"
+    trap 'rm -f "$TMP"' EXIT
+    magick -background none -density 600 "$LOGGA" -resize "x$LOGGA_HOJD" "$TMP"
+    magick "$OUT" \
+      \( "$TMP" -alpha set -channel A -evaluate multiply 0.8 +channel \) \
+      -gravity south -geometry +0+140 -composite \
+      -quality 88 "$OUT"
+    LOGGTEXT=", med logga"
+else
+    LOGGTEXT=", utan logga ($LOGGA saknas)"
+fi
+
+echo "Skrev $OUT ($PALETT, ${BREDD}x${HOJD}$LOGGTEXT, $(du -h "$OUT" | cut -f1))"
