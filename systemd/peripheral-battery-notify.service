@@ -1,0 +1,16 @@
+[Unit]
+# Kör scripts/peripheral-battery-notify, som säger till när batteriet i en
+# handkontroll eller ett tangentbord börjar ta slut. Hyprland har ingen sådan
+# agent inbyggd - GNOME och KDE gör det åt en.
+Description=Varna när kringutrustningens batteri tar slut
+Documentation=file:%h/dotfiles/scripts/peripheral-battery-notify
+
+# UPower äger batteridatan. Utan den gör skriptet ingenting.
+After=dbus.service
+
+[Service]
+Type=oneshot
+ExecStart=%h/dotfiles/scripts/peripheral-battery-notify
+
+# Anvandartjanst, inte systemtjanst: notify-send behöver sessionens DBus för
+# att nå notifieringsdaemonen. Som root finns ingen session att skicka till.

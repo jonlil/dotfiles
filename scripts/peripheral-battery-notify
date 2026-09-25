@@ -1,0 +1,99 @@
+#!/bin/sh
+# Notifierar när batteriet i en inkopplad kringutrustning börjar ta slut.
+#
+# Hyprland har ingen sådan agent inbyggd - GNOME och KDE gör det åt en, men här
+# får man bygga det själv. UPower känner däremot redan till enheterna, så det
+# här skriptet behöver bara läsa av och säga till.
+#
+# ## Varför battery-level och inte procent
+#
+# En Switch Pro Controller rapporterar hinkar, inte en mätare. UPower säger det
+# rakt ut:
+#
+#     battery-level:  high
+#     warning-level:  none
+#     percentage:     70% (should be ignored)
+#
+# Procenten är påhittad ur hinken och hoppar i stora steg. Därför tittar vi på
+# warning-level, som UPower härleder och som är jämförbar mellan enheter.
+#
+# ## Varför polling
+#
+# UPower skickar DBus-signaler, men att prenumerera på dem från ett skalskript
+# kräver en långlivad process och `dbus-monitor`-parsning. Ett batteri som tar
+# timmar på sig att laddas ur behöver inte bevakas oftare än så här, och en
+# timer som avslutar direkt är enklare att resonera om än en daemon.
+
+set -eu
+
+# Var senaste nivå per enhet sparas. XDG_RUNTIME_DIR nollas vid omstart, vilket
+# är precis vad vi vill: efter en omstart får man gärna påminnas igen.
+STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/peripheral-battery"
+mkdir -p "$STATE_DIR"
+
+notify() {
+    # $1 urgency, $2 rubrik, $3 text
+    notify-send -a "Batteri" -u "$1" -i battery-caution "$2" "$3" 2>/dev/null || true
+}
+
+for path in $(upower -e 2>/dev/null); do
+    case "$path" in
+        # Laptopens eget batteri sköts av waybar; nätdelen och den
+        # sammanslagna DisplayDevice är inte kringutrustning.
+        *battery_BAT*|*line_power_*|*DisplayDevice) continue ;;
+    esac
+
+    info=$(upower -i "$path" 2>/dev/null) || continue
+    echo "$info" | grep -q "power supply:.*no" || continue
+
+    level=$(echo "$info" | sed -n 's/.*warning-level: *//p' | head -1)
+    state=$(echo "$info" | sed -n 's/.*state: *//p' | head -1)
+    icon=$(echo "$info" | sed -n 's/.*icon-name: *//p' | head -1)
+    model=$(echo "$info" | sed -n 's/.*model: *//p' | head -1)
+    [ -n "$level" ] || continue
+    [ -n "$model" ] || model="En kringutrustning"
+
+    # Fälten skiljer sig åt mellan enhetsklasser. Uppmätt:
+    #
+    #   Pro Controller   ingen state-rad alls, men battery-level och icon-name
+    #   Air75-tangentbord  state: unknown, ingen battery-level
+    #
+    # warning-level finns på båda, så den bär beslutet. Laddning går däremot
+    # bara att läsa ur ikonnamnet för den som saknar state.
+    charging=no
+    case "$state" in
+        charging|fully-charged) charging=yes ;;
+    esac
+    case "$icon" in
+        *charging*|*charged*) charging=yes ;;
+    esac
+
+    key=$(echo "$path" | tr -c 'A-Za-z0-9' '_')
+    last_file="$STATE_DIR/$key"
+    last=$(cat "$last_file" 2>/dev/null || echo none)
+
+    # Laddar den igen är varningen inte längre relevant, och nästa urladdning
+    # ska få säga till på nytt.
+    if [ "$charging" = yes ]; then
+        rm -f "$last_file"
+        continue
+    fi
+
+    # Bara vid övergång till en sämre nivå, annars tjatar timern var femte minut.
+    [ "$level" = "$last" ] && continue
+
+    case "$level" in
+        critical)
+            notify critical "$model" "Batteriet är nästan slut. Ladda nu." ;;
+        low)
+            notify normal "$model" "Batteriet börjar ta slut." ;;
+        *)
+            # Tillbaka till none eller discharging utan varning: glöm läget,
+            # men säg inget.
+            rm -f "$last_file"
+            continue
+            ;;
+    esac
+
+    printf '%s' "$level" > "$last_file"
+done

@@ -1,0 +1,15 @@
+[Unit]
+Description=Kolla kringutrustningens batteri regelbundet
+
+[Timer]
+# Första kollen en stund efter inloggning, så att UPower hunnit upptäcka det
+# som är inkopplat.
+OnStartupSec=2min
+
+# Ett batteri som tar timmar på sig att laddas ur behöver inte bevakas tätare.
+# Skriptet noterar dessutom senaste nivån per enhet, så en nivå varnar bara en
+# gång - timern kan gå ofta utan att tjata.
+OnUnitActiveSec=5min
+
+[Install]
+WantedBy=timers.target
