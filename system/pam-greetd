@@ -1,0 +1,28 @@
+#%PAM-1.0
+#
+# Kopia av greetd-paketets /etc/pam.d/greetd plus de två pam_gnome_keyring-
+# raderna. Utan dem låses ~/.local/share/keyrings/login.keyring aldrig upp vid
+# inloggning: gnome-keyring-daemon startar (hyprland.lua gör det, och
+# gnome-keyring-daemon.socket är enabled), men ingen ger den lösenordet - och
+# då frågar seahorse och allt annat som går via libsecret efter det igen.
+#
+# auth-raden fångar lösenordet du redan skrev i greetern, session-raden låser
+# upp keyringen med det. Båda är `optional`, så en trasig modul kan inte låsa
+# ute dig - inloggningen fortsätter utan upplåst keyring.
+#
+# Förutsätter att keyringen har samma lösenord som användarkontot. Har den ett
+# eget måste det bytas i seahorse (Lösenord -> Login -> Ändra lösenord) till
+# kontolösenordet, annars kan PAM inte låsa upp den.
+#
+# /etc/pam.d/greetd är en pacman backup-fil, så den här ändringen skrivs inte
+# över vid uppdatering - då dyker det upp en .pacnew att jämföra med istället.
+
+auth       required     pam_securetty.so
+auth       requisite    pam_nologin.so
+auth       include      system-local-login
+auth       optional     pam_gnome_keyring.so
+
+account    include      system-local-login
+
+session    include      system-local-login
+session    optional     pam_gnome_keyring.so auto_start

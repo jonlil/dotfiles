@@ -1,0 +1,135 @@
+/* Catppuccin Mocha - samma palett som waybar/style.css, eww/eww.scss och
+ * mako/config, så inloggningen hör ihop med resten av skrivbordet.
+ *
+ * regreet länkar mot ren GTK4 utan libadwaita (ldd visar bara libgtk-4), så
+ * det är GTK4:s inbyggda Adwaita som slår upp färgnamnen nedan.
+ *
+ * regreet sätter inga css-klasser på sina egna widgets, så klockan och
+ * bottenraden måste träffas på syskonposition. Ordningen är uppmätt med
+ * `regreet --demo` och en css som färgar varje nth-child:
+ *   1 = bakgrundsytan (fyller skärmen)   3 = klockan
+ *   2 = inloggningskortet                4 = raden med Reboot/Power Off
+ * Notera att ordningen inte följer den visuella - klockan ritas överst men är
+ * barn nummer tre. Mät om med samma knep om en uppdatering flyttar på dem. */
+
+@define-color base     #1e1e2e;
+@define-color mantle   #181825;
+@define-color crust    #11111b;
+@define-color surface0 #313244;
+@define-color surface1 #45475a;
+@define-color surface2 #585b70;
+@define-color subtext0 #a6adc8;
+@define-color text     #cdd6f4;
+@define-color blue     #89b4fa;
+@define-color mauve    #cba6f7;
+@define-color red      #f38ba8;
+
+@define-color window_bg_color  @base;
+@define-color window_fg_color  @text;
+@define-color view_bg_color    @mantle;
+@define-color view_fg_color    @text;
+@define-color card_bg_color    @surface0;
+@define-color popover_bg_color @surface0;
+@define-color popover_fg_color @text;
+@define-color accent_bg_color  @blue;
+@define-color accent_fg_color  @crust;
+@define-color accent_color     @blue;
+
+window, .background { background-color: @base; color: @text; }
+
+/* Bakgrundsytan ska vara just bara bakgrund. */
+window > * > *:nth-child(1) {
+  background-color: transparent;
+  border: none;
+}
+
+/* Inloggningskortet. Rundningen är 16px som i mako, så notiser och greeter
+ * ser ut att komma från samma system. */
+window > * > *:nth-child(2) {
+  background-color: @mantle;
+  border: 1px solid @surface1;
+  border-radius: 16px;
+  padding: 28px 32px;
+}
+
+/* Klockan sitter annars klistrad i skärmkanten med en GTK-ram runt sig. */
+window > * > *:nth-child(3) {
+  background-color: transparent;
+  border: none;
+  margin-top: 56px;
+}
+window > * > *:nth-child(3) label {
+  font-size: 44px;
+  font-weight: 200;
+  color: @subtext0;
+}
+
+window > * > *:nth-child(4) {
+  background-color: transparent;
+  border: none;
+  margin-bottom: 32px;
+}
+
+entry {
+  background-color: @surface0;
+  color: @text;
+  border: 1px solid @surface1;
+  border-radius: 10px;
+  padding: 8px 12px;
+  min-height: 36px;
+}
+entry:focus { border-color: @blue; box-shadow: none; }
+
+button {
+  background-image: none;
+  background-color: @surface0;
+  color: @text;
+  border: 1px solid @surface1;
+  border-radius: 10px;
+  padding: 8px 18px;
+  min-height: 36px;
+}
+button:hover { background-color: @surface1; }
+button:active, button:checked { background-color: @surface2; }
+
+/* Färgen måste sättas på label-noden också - `color` på enbart knappen
+ * förlorar mot GTK:s egen .suggested-action-regel, och texten blir ljus mot
+ * det ljusblå och nästan oläslig. */
+button.suggested-action, button.suggested-action label {
+  background-color: @blue;
+  color: @crust;
+  border-color: @blue;
+  font-weight: bold;
+}
+button.suggested-action:hover, button.suggested-action:hover label {
+  background-color: @mauve;
+  color: @crust;
+}
+
+/* Reboot och poweroff blir röda först vid hover - annars drar de blicken
+ * varje gång man loggar in. */
+button.destructive-action, button.destructive-action label {
+  background-color: @surface0;
+  color: @red;
+  border-color: @surface1;
+}
+button.destructive-action:hover, button.destructive-action:hover label {
+  background-color: @red;
+  color: @crust;
+}
+
+dropdown, combobox, dropdown > button, combobox button {
+  background-color: @surface0;
+  color: @text;
+  border-radius: 10px;
+}
+popover > contents, popover contents {
+  background-color: @surface0;
+  color: @text;
+  border: 1px solid @surface1;
+  border-radius: 12px;
+}
+popover listview row:selected { background-color: @blue; color: @crust; }
+
+label { color: @text; }
+label.error, .error { color: @red; }

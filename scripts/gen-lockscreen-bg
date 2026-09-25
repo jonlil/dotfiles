@@ -1,0 +1,57 @@
+#!/bin/sh
+# Genererar bakgrunden till låsskärmen (hypr/lockscreen.jpg).
+#
+#   gen-lockscreen-bg            # sval palett (blue, mauve, teal) - den som används
+#   gen-lockscreen-bg karamell   # varm palett (peach, flamingo, yellow)
+#   gen-lockscreen-bg sval /tmp/test.jpg
+#
+# Mesh-gradient i Catppuccin Mocha: färgade cirklar ritas på en liten canvas,
+# blurras sönder till mjuka fält och skalas upp. Att rita smått och skala upp
+# är poängen - en blur på 2560x1600 direkt tar evigheter och ger inte mjukare
+# övergångar.
+#
+# Tre saker är intrimmade och tål inte att ändras vårdslöst:
+#   - Basen är nästan svart. Ljusare än så dränks bilden där fälten överlappar,
+#     och den varma paletten tippar över i mangosmoothie.
+#   - Radierna håller fälten isär så mitten förblir mörk - där står klockan och
+#     lösenordsrutan, och de måste gå att läsa.
+#   - Mättnaden håller pastellerna krämiga. Över ~140 blir de neon; under ~105
+#     blir de ljusaste färgerna gråa i stället för mjuka.
+#
+# Bruset är slumpmässigt, så varje körning ger en unik variant.
+set -e
+
+PALETT="${1:-sval}"
+OUT="${2:-$(dirname "$0")/../hypr/lockscreen.jpg}"
+
+case "$PALETT" in
+  sval)
+    BAS='#11111b'; MOD='66,145'
+    set -- -fill '#89b4fa' -draw 'circle 250,220 250,470' \
+           -fill '#cba6f7' -draw 'circle 980,180 980,400' \
+           -fill '#94e2d5' -draw 'circle 640,700 640,860' \
+           -fill '#f5c2e7' -draw 'circle 1150,620 1150,760' \
+           -fill '#74c7ec' -draw 'circle 120,760 120,880'
+    ;;
+  karamell)
+    # Varmare bas: med ren #11111b blir glappen mellan de varma fälten
+    # gråbruna och smutsiga.
+    BAS='#1a1218'; MOD='64,112'
+    set -- -fill '#fab387' -draw 'circle 260,230 260,490' \
+           -fill '#f2cdcd' -draw 'circle 990,190 990,420' \
+           -fill '#f9e2af' -draw 'circle 620,690 620,880' \
+           -fill '#eba0ac' -draw 'circle 1160,640 1160,800' \
+           -fill '#f5c2e7' -draw 'circle 140,750 140,900'
+    ;;
+  *)
+    echo "Okänd palett: $PALETT (välj 'sval' eller 'karamell')" >&2; exit 1 ;;
+esac
+
+magick -size 1280x800 xc:"$BAS" "$@" \
+  -blur 0x115 \
+  -resize 2560x1600 \
+  -modulate "$MOD" \
+  -attenuate 0.3 +noise Gaussian \
+  -quality 88 "$OUT"
+
+echo "Skrev $OUT ($PALETT, $(du -h "$OUT" | cut -f1))"

@@ -16,8 +16,12 @@ link() {
     echo "LINK: $src -> $dest"
 }
 
-# Hyprland
+# Hyprland. hypridle läser bara ~/.config/hypr/hypridle.conf - utan länken
+# kraschar den direkt vid sessionsstart och skärmen låser sig aldrig.
 link "$DOTFILES/hypr/hyprland.lua" "$HOME/.config/hypr/hyprland.lua"
+link "$DOTFILES/hypr/hypridle.conf" "$HOME/.config/hypr/hypridle.conf"
+link "$DOTFILES/hypr/hyprlock.conf" "$HOME/.config/hypr/hyprlock.conf"
+link "$DOTFILES/hypr/lockscreen.jpg" "$HOME/.config/hypr/lockscreen.jpg"
 
 # Waybar
 link "$DOTFILES/waybar/config.jsonc" "$HOME/.config/waybar/config.jsonc"
@@ -90,10 +94,18 @@ echo "  sudo mkdir -p /etc/NetworkManager/conf.d"
 echo "  sudo cp system/NetworkManager-dns.conf /etc/NetworkManager/conf.d/dns.conf"
 echo "  sudo system/install-xkb-variants.sh  # xkb-varianten se(swerty) för Air75-tangentborden"
 echo ""
+echo "Grafisk inloggning (greetd + regreet, startar Hyprland på vt1):"
+echo "  sudo cp system/greetd-config.toml /etc/greetd/config.toml"
+echo "  sudo cp system/greetd-hyprland.conf /etc/greetd/hyprland.conf"
+echo "  sudo cp system/regreet.toml /etc/greetd/regreet.toml"
+echo "  sudo cp system/regreet.css /etc/greetd/regreet.css"
+echo "  sudo cp system/pam-greetd /etc/pam.d/greetd    # låser upp gnome-keyring vid inloggning"
+echo "  sudo systemctl enable greetd    # inte --now: greetd tar vt1, kör om från en tty"
+echo ""
 echo "Handkontroller i FS25 (se system/gaming.md för varför):"
 echo "  sudo ln -sf \"$DOTFILES/scripts/joystick-bridge\" /usr/local/bin/joystick-bridge"
 echo "  sudo cp system/99-saitek-axis-center.rules /etc/udev/rules.d/  # axelmitt 128, kräver linuxconsole"
-echo "  sudo cp system/70-fs25-controllers.rules /etc/udev/rules.d/    # döljer fysiska enheter för Wine"
+echo "  sudo cp system/72-fs25-controllers.rules /etc/udev/rules.d/    # döljer fysiska enheter för Wine"
 echo "  sudo cp systemd/joystick-bridge.service /etc/systemd/system/"
 echo "  sudo systemctl daemon-reload"
 echo "  sudo systemctl enable --now joystick-bridge.service            # måste köras som root"

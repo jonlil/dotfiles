@@ -1,0 +1,30 @@
+# Utseendet ligger i regreet.css - den här filen väljer bara vilket GTK-tema
+# och vilken font CSS:en bygger vidare på, plus texterna runt omkring.
+#
+# Ingen [background]-sektion: det finns ingen bildfil på maskinen, och utan
+# path kraschar regreet på sektionen. Bakgrunden sätts som solid färg i CSS:en.
+
+[GTK]
+application_prefer_dark_theme = true
+cursor_theme_name = "Adwaita"
+cursor_blink = true
+# JetBrainsMono Nerd Font är redan fonten i mako och waybar.
+font_name = "JetBrainsMono Nerd Font 12"
+icon_theme_name = "Adwaita"
+# Adwaita är det enda GTK-temat som finns installerat (/usr/share/themes har
+# bara Default och Emacs) - all färgsättning kommer från regreet.css istället.
+theme_name = "Adwaita"
+
+[appearance]
+greeting_msg = "Välkommen tillbaka"
+
+[widget.clock]
+format = "%A %d %B  %H:%M"
+resolution = "1s"
+label_width = 700
+# Systemets LANG är en_US, men dag- och månadsnamn ska vara svenska.
+locale = "sv_SE"
+
+[commands]
+reboot = ["systemctl", "reboot"]
+poweroff = ["systemctl", "poweroff"]
