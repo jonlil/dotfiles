@@ -2,9 +2,15 @@
 # cardN and renderDN numbering is assigned at boot in probe order and can change;
 # these follow the PCI slot instead. On the Legion the dGPU has taken renderD128
 # and the iGPU renderD129, i.e. the reverse of what the card numbers suggest.
-# Intel Arrow Lake iGPU
+# One file for both machines: SUBSYSTEM=="drm" makes a line whose PCI slot
+# holds no GPU on this machine a no-op.
+
+# Intel iGPU (00:02.0 on both the X1E Gen 3 and the Legion Pro 5)
 KERNEL=="card*",    KERNELS=="0000:00:02.0", SUBSYSTEM=="drm", SUBSYSTEMS=="pci", SYMLINK+="dri/intel-igpu"
 KERNEL=="renderD*", KERNELS=="0000:00:02.0", SUBSYSTEM=="drm", SUBSYSTEMS=="pci", SYMLINK+="dri/intel-igpu-render"
-# NVIDIA GB205M GeForce RTX 5070 Ti Mobile
+# NVIDIA TU117M GeForce GTX 1650 Ti Mobile (ThinkPad X1 Extreme Gen 3)
+KERNEL=="card*",    KERNELS=="0000:01:00.0", SUBSYSTEM=="drm", SUBSYSTEMS=="pci", SYMLINK+="dri/nvidia-dgpu"
+KERNEL=="renderD*", KERNELS=="0000:01:00.0", SUBSYSTEM=="drm", SUBSYSTEMS=="pci", SYMLINK+="dri/nvidia-dgpu-render"
+# NVIDIA GB205M GeForce RTX 5070 Ti Mobile (Legion Pro 5 16IAX10H)
 KERNEL=="card*",    KERNELS=="0000:02:00.0", SUBSYSTEM=="drm", SUBSYSTEMS=="pci", SYMLINK+="dri/nvidia-dgpu"
 KERNEL=="renderD*", KERNELS=="0000:02:00.0", SUBSYSTEM=="drm", SUBSYSTEMS=="pci", SYMLINK+="dri/nvidia-dgpu-render"

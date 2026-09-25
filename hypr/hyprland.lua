@@ -3,17 +3,61 @@
 -- Reference: https://wiki.hypr.land/Configuring/Start/
 --
 
+-----------------
+---- MACHINE ----
+-----------------
+
+-- Samma config på båda laptopsen; det som skiljer sig per maskin ligger i
+-- tabellen här. Maskinen identifieras via DMI, inte
+-- hostname, så den överlever ominstallation och omdöpning.
+local function readFirstLine(path)
+    local f = io.open(path)
+    if not f then return nil end
+    local line = f:read("*l")
+    f:close()
+    return line
+end
+
+local machines = {
+    x1e = {
+        -- ThinkPad X1 Extreme Gen 3: 16" 4K-panel med bara ett läge.
+        -- Scale 2 = 1920x1080 logiskt, heltalsskalning så allt blir skarpt.
+        laptopMode        = "3840x2160@60",
+        laptopScaleSolo   = 2,
+        laptopScaleDocked = 2,
+        kbdBacklight      = "tpacpi::kbd_backlight",
+    },
+    legion = {
+        -- Legion Pro 5 16IAX10H: 2560x1600@165.
+        laptopMode        = "2560x1600@165",
+        laptopScaleSolo   = 1.25,
+        laptopScaleDocked = 1.6,
+        kbdBacklight      = "platform::kbd_backlight",
+    },
+}
+
+-- Lenovo lägger modellnamnet i olika DMI-fält beroende på serie (ThinkPad:
+-- product_family, Legion: product_version), så titta i båda.
+local dmi = (readFirstLine("/sys/class/dmi/id/product_family") or "") .. " "
+         .. (readFirstLine("/sys/class/dmi/id/product_version") or "")
+local machine = machines[
+    dmi:find("Legion")   and "legion" or
+    dmi:find("ThinkPad") and "x1e"    or
+    "legion" -- okänd maskin: Legion är huvudmaskinen
+]
+
+
 ------------------
 ---- MONITORS ----
 ------------------
 
 -- eDP-1 deklareras i applyLaptopScale() nedan: skalan beror på om en extern
 -- skärm är inkopplad. Ensam laptopskärm får mindre skala (mer skärmyta),
--- dockad går den tillbaka till 1.6 så fönster inte hoppar i storlek mellan
--- skärmarna.
-local laptopMode         = "2560x1600@165"
-local laptopScaleSolo    = 1.25
-local laptopScaleDocked  = 1.6
+-- dockad går den tillbaka till en högre skala så fönster inte hoppar i
+-- storlek mellan skärmarna. Värdena ligger i maskintabellen ovan.
+local laptopMode         = machine.laptopMode
+local laptopScaleSolo    = machine.laptopScaleSolo
+local laptopScaleDocked  = machine.laptopScaleDocked
 
 -- MSI hemma. Matchas på beskrivning: på Legion sitter den på nvidia-utgången DP-3,
 -- på förra datorn var den DP-1, och connector-numret kan flytta mellan portar.
@@ -142,7 +186,15 @@ hl.env("LIBVA_DRIVER_NAME", "iHD")
 -- Samma sak för render-noden: renderD128/129 byter plats mellan boots, och på
 -- Legion är det dGPU:n som tar renderD128. Pekar iHD på nvidia-noden slutar
 -- hårdvaruavkodning fungera tyst, så gå via PCI-symlinken.
-hl.env("LIBVA_DRM_DEVICE", "/dev/dri/intel-igpu-render")
+-- Faller tillbaka på by-path om udev-regeln inte är installerad än; iGPU:n
+-- sitter på 00:02.0 på båda maskinerna.
+local function exists(path)
+    local f = io.open(path)
+    if f then f:close() return true end
+    return false
+end
+hl.env("LIBVA_DRM_DEVICE", exists("/dev/dri/intel-igpu-render") and "/dev/dri/intel-igpu-render"
+                                                                 or "/dev/dri/by-path/pci-0000:00:02.0-render")
 hl.env("XDG_SESSION_TYPE", "wayland")
 hl.env("GDK_SCALE", "1")
 hl.env("SSH_AUTH_SOCK", os.getenv("XDG_RUNTIME_DIR") .. "/gcr/ssh")
@@ -464,8 +516,8 @@ hl.bind("XF86AudioMute",         hl.dsp.exec_cmd("~/dotfiles/scripts/volume-rout
 hl.bind("XF86AudioMicMute",      hl.dsp.exec_cmd([[wpctl set-mute @DEFAULT_SOURCE@ toggle && (wpctl get-volume @DEFAULT_SOURCE@ | grep -q MUTED && notify-send -u critical -t 2000 "🔇 Mic MUTED" || notify-send -t 2000 "🎤 Mic ON")]]), { locked = true })
 hl.bind("XF86MonBrightnessUp",   hl.dsp.exec_cmd("brightnessctl -d intel_backlight set 5%+"), { locked = true, repeating = true })
 hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("brightnessctl -d intel_backlight set 5%-"), { locked = true, repeating = true })
-hl.bind("XF86KbdBrightnessUp",   hl.dsp.exec_cmd("brightnessctl -d platform::kbd_backlight set +1"), { locked = true, repeating = true })
-hl.bind("XF86KbdBrightnessDown", hl.dsp.exec_cmd("brightnessctl -d platform::kbd_backlight set 1-"), { locked = true, repeating = true })
+hl.bind("XF86KbdBrightnessUp",   hl.dsp.exec_cmd("brightnessctl -d " .. machine.kbdBacklight .. " set +1"), { locked = true, repeating = true })
+hl.bind("XF86KbdBrightnessDown", hl.dsp.exec_cmd("brightnessctl -d " .. machine.kbdBacklight .. " set 1-"), { locked = true, repeating = true })
 hl.bind("XF86AudioPlay",         hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
 hl.bind("XF86AudioNext",         hl.dsp.exec_cmd("playerctl next"),       { locked = true })
 hl.bind("XF86AudioPrev",         hl.dsp.exec_cmd("playerctl previous"),   { locked = true })
