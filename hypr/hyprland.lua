@@ -20,6 +20,49 @@ local laptopScaleDocked  = 1.6
 hl.monitor({ output = "desc:Microstep MSI MAG271CQR", mode = "2560x1440@144", position = "auto-left", scale = 1 })
 -- Tillfällig skärm hos Dinice (Philips 27M2N3500N via HDMI), matchas på beskrivning
 hl.monitor({ output = "desc:Philips Consumer Electronics Company 27M2N3500N", mode = "2560x1440@144", position = "auto-left", scale = 1 })
+-- Samsung-TV hemma (HDMI på nvidia-utgången). Ligger ovanför laptopen: musen
+-- går upp från laptopen till TV:n och ner från TV:n till laptopen.
+-- 1080p@120 är taket med nuvarande kabel. Den är "High Speed" (HDMI 1.4,
+-- ~340 MHz); 1080p@120 och 4K@30 ligger båda på 297 MHz och ryms, medan
+-- 4K@60 kräver 594 MHz och inte går igenom. Av de två som ryms är 120 Hz
+-- bättre för spel än 4K@30, som är ryckigt redan vid musrörelse.
+--
+-- För 4K@60 krävs TVÅ saker, annars blir det svart skärm:
+--   1. En Premium High Speed-kabel (18 Gbit/s). Ultra High Speed behövs inte,
+--      TV:n taknar ändå på 600 MHz — 4K@120 kräver HDMI 2.1 och panelen är
+--      en 2018:a.
+--   2. "HDMI UHD Color" (Input Signal Plus) på för HDMI 4 i TV:ns meny.
+--      Porten framgår av EDID: "Source physical address: 4.0.0.0".
+-- Sätt då mode = "3840x2160@60" och scale = 2 (logiskt 1920x1080 — samma yta
+-- som nu, dubbel pixeltäthet, heltalsskala så positionen nedan fortsatt stämmer).
+--
+-- Obs: Hyprland uppdaterar inte sin modelista när TV:n byter EDID. Sätter man
+-- ett läge som inte står i `hyprctl monitors` availableModes loopar aquamarine
+-- "atomic drm request: failed to commit: Invalid argument" och skärmen förblir
+-- svart. Kontrollera att läget finns i listan innan mode ändras här.
+-- Matchas på "Samsung Electric Company", inte bara "Samsung" — den inbyggda
+-- panelen heter "Samsung Display Corp." och får inte träffas av samma regel.
+-- Positionen räknas ut ur skalan: TV:n ska ligga precis ovanför laptopen, så
+-- dess underkant måste hamna på y=0. Hårdkodas y-värdet istället glider det ur
+-- synk så fort scale ändras, och då uppstår ett glapp mellan skärmarna som
+-- varken musen eller SUPER+pil kan ta sig över.
+-- 2560x1440@120 kräver två saker av TV:n, och båda kan tappas bort:
+--   1. Input Signal Plus påslaget för den HDMI-ingång kabeln sitter i. Utan den
+--      serverar TV:n en HDMI 1.4-EDID där läget inte ens finns.
+--   2. En certifierad 18 Gbps-kabel - pixelklockan ligger på ~470 MHz, långt
+--      över vad en vanlig High Speed-kabel (340 MHz) klarar.
+-- Drar man ur kabeln glömmer TV:n punkt 1 och börjar om på 1.4. Ändra därför i
+-- TV:ns meny med sladden i, och tvinga omläsningen från Linux i stället:
+--   sudo sh -c 'echo off > /sys/class/drm/card2-HDMI-A-1/status; sleep 2;
+--               echo detect > /sys/class/drm/card2-HDMI-A-1/status'
+local tvW, tvH, tvRefresh = 2560, 1440, 120
+local tvScale = 1     -- logiskt = fysiskt, inga omsamplingssteg. Måste gå jämnt ut.
+hl.monitor({
+    output   = "desc:Samsung Electric Company SAMSUNG",
+    mode     = tvW .. "x" .. tvH .. "@" .. tvRefresh,
+    position = "0x-" .. math.floor(tvH / tvScale),
+    scale    = tvScale,
+})
 
 -- Vid monitor.removed kan den frånkopplade skärmen fortfarande ligga kvar i
 -- hl.get_monitors(); exkludera den explicit när eventet ger oss namnet.
@@ -77,7 +120,14 @@ end)
 -- Intel primary (eDP-1 native), NVIDIA secondary (external monitors)
 -- Symlinks come from /etc/udev/rules.d/99-gpu-dev-paths.rules and follow the
 -- PCI slot, since card* numbering is reassigned at boot.
-hl.env("AQ_DRM_DEVICES", "/dev/dri/intel-igpu:/dev/dri/nvidia-dgpu")
+-- Ordningen avgör vilken GPU Hyprland komponerar på. Intel först är rätt för
+-- vardagsbruk: eDP-1 sitter på iGPU:n och blir kopiefri, och dGPU:n kan sova.
+-- Priset syns först vid spel på en extern skärm, där varje bildruta går
+-- NVIDIA -> Intel -> NVIDIA (uppmätt ~53 % iGPU-belastning i FS25, 1440p120).
+-- Sessionen "Hyprland (NVIDIA primär)" i greetern sätter override-variabeln och
+-- vänder på ordningen, så att dGPU:n blir renderenhet. Utan den gäller Intel.
+hl.env("AQ_DRM_DEVICES", os.getenv("AQ_DRM_DEVICES_OVERRIDE")
+                         or "/dev/dri/intel-igpu:/dev/dri/nvidia-dgpu")
 -- ~/.local/bin ligger inte i PATH på Arch, och allt Hyprland startar ärver
 -- kompositorns PATH - inklusive Steam, som därför inte hittade nvidia-offload.
 -- Sätts här istället för i zprofile, som bara gäller för inloggade zsh-shellar.
@@ -161,9 +211,18 @@ hl.config({
         force_zero_scaling = true,
     },
 
-    -- render.direct_scanout was tried at 1 and caused purple flicker in the
-    -- top-right corner in FS22, which the wiki lists as a known symptom.
-    -- Left at the default 0.
+    -- Direct scanout lämnar en helskärmsyta direkt till displaykontrollern utan
+    -- komponering. Utan den går varje bildruta NVIDIA -> Intel -> NVIDIA, eftersom
+    -- AQ_DRM_DEVICES gör iGPU:n till renderenhet men HDMI hänger på dGPU:n. Det
+    -- kostade uppmätt ~53 % iGPU-belastning under FS25 i 1440p120.
+    --
+    -- Provades tidigare på 1 och gav lila flimmer i övre högra hörnet i FS22, ett
+    -- känt symptom enligt wikin. Omprövas nu på Hyprland 0.56 med annan
+    -- skärmuppsättning. Ser du flimmer: sätt tillbaka till 0.
+    -- Obs: kräver hårdvarumuspekare, se cursor.no_hardware_cursors ovan.
+    render = {
+        direct_scanout = 0,
+    },
 
     debug = {
         disable_logs = false,
@@ -260,28 +319,47 @@ hl.workspace_rule({ workspace = "8", monitor = "eDP-1" })
 -- Prioritetsordning: MSI hemma, Philips hos Dinice, annars första externa skärmen.
 -- Utan extern skärm: eDP-1. Matchning sker på beskrivning, inte connector-namn,
 -- eftersom samma skärm kan heta DP-1 på en dator och DP-3 på en annan.
-local externalMonitors = { "MSI MAG271CQR", "Philips Consumer Electronics Company 27M2N3500N" }
+local externalMonitors = { "MSI MAG271CQR", "Philips Consumer Electronics Company 27M2N3500N", "Samsung Electric Company SAMSUNG" }
 
-local function applyWorkWorkspaces()
+-- excludeName behövs vid monitor.removed: den frånkopplade skärmen kan
+-- fortfarande ligga kvar i hl.get_monitors() när eventet kommer.
+local function preferredMonitor(excludeName)
     local monitors = hl.get_monitors()
 
-    local target = "eDP-1"
     for _, wanted in ipairs(externalMonitors) do
         for _, m in ipairs(monitors) do
-            if m.description and m.description:find(wanted, 1, true) then
-                target = m.name
-                break
+            if m.name ~= excludeName and m.description
+               and m.description:find(wanted, 1, true) then
+                return m.name
             end
         end
-        if target ~= "eDP-1" then break end
     end
 
     -- Okänd extern skärm: ta första som inte är den inbyggda panelen.
-    if target == "eDP-1" then
-        for _, m in ipairs(monitors) do
-            if m.name ~= "eDP-1" then target = m.name break end
-        end
+    for _, m in ipairs(monitors) do
+        if m.name ~= "eDP-1" and m.name ~= excludeName then return m.name end
     end
+
+    return "eDP-1"
+end
+
+-- XWayland sätter ingen primary-utgång, och X11-appar faller då tillbaka på
+-- utgång 0 i origo, alltså eDP-1. Proton-spel låser sin fönsterstorlek till
+-- den vid start, oavsett vilken skärm fönstret hamnar på: FS25 räknade sin
+-- layout i 2560x1600 och presenterade den i 1920x1080, vilket gav ovala
+-- ikoner och avhuggen HUD. Flaggan nollställs när en skärm kopplas ur, så
+-- den sätts om vid varje monitorevent.
+-- Fördröjningen behövs åt båda hållen: vid sessionsstart kan XWayland ännu inte
+-- vara uppe, och vid monitor.added registrerar XWayland utgången någon bråkdel
+-- efter Hyprland - körs xrandr för tidigt finns namnet inte än och flaggan
+-- hamnar ingenstans, tyst.
+local function applyXwaylandPrimary(excludeName)
+    hl.exec_cmd("sh -c 'sleep 3; xrandr --output "
+                .. preferredMonitor(excludeName) .. " --primary'")
+end
+
+local function applyWorkWorkspaces(excludeName)
+    local target = preferredMonitor(excludeName)
 
     hl.workspace_rule({ workspace = "3", monitor = target, default = (target ~= "eDP-1") })
     for _, ws in ipairs({ "4", "5", "6" }) do
@@ -299,14 +377,19 @@ end
 
 applyWorkWorkspaces()
 
+applyXwaylandPrimary()
+
 hl.on("monitor.added", function()
     applyLaptopScale()
     applyWorkWorkspaces()
+    applyXwaylandPrimary()
 end)
 
 hl.on("monitor.removed", function(m)
-    applyLaptopScale(type(m) == "table" and m.name or nil)
-    applyWorkWorkspaces()
+    local gone = type(m) == "table" and m.name or nil
+    applyLaptopScale(gone)
+    applyWorkWorkspaces(gone)
+    applyXwaylandPrimary(gone)
 end)
 
 
@@ -334,6 +417,14 @@ hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "l" }))
 hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "r" }))
 hl.bind(mainMod .. " + up",    hl.dsp.focus({ direction = "u" }))
 hl.bind(mainMod .. " + down",  hl.dsp.focus({ direction = "d" }))
+
+-- Hoppa mellan skärmar med mainMod + ALT + pil. Behövs utöver "direction" ovan:
+-- den flyttar fokus till ett FÖNSTER i riktningen, så en skärm utan fönster går
+-- inte att nå med den — typiskt TV:n, som ofta står tom.
+hl.bind(mainMod .. " + ALT + up",    hl.dsp.focus({ monitor = "u" }))
+hl.bind(mainMod .. " + ALT + down",  hl.dsp.focus({ monitor = "d" }))
+hl.bind(mainMod .. " + ALT + left",  hl.dsp.focus({ monitor = "l" }))
+hl.bind(mainMod .. " + ALT + right", hl.dsp.focus({ monitor = "r" }))
 
 -- Resize the active window with ctrl + arrow keys
 hl.bind(ctrlMod .. " + right", hl.dsp.window.resize({ x = 10,  y = 0,   relative = true }))
@@ -371,10 +462,10 @@ hl.bind("XF86AudioRaiseVolume",  hl.dsp.exec_cmd("~/dotfiles/scripts/volume-rout
 hl.bind("XF86AudioLowerVolume",  hl.dsp.exec_cmd("~/dotfiles/scripts/volume-router down"), { locked = true, repeating = true })
 hl.bind("XF86AudioMute",         hl.dsp.exec_cmd("~/dotfiles/scripts/volume-router mute"), { locked = true })
 hl.bind("XF86AudioMicMute",      hl.dsp.exec_cmd([[wpctl set-mute @DEFAULT_SOURCE@ toggle && (wpctl get-volume @DEFAULT_SOURCE@ | grep -q MUTED && notify-send -u critical -t 2000 "🔇 Mic MUTED" || notify-send -t 2000 "🎤 Mic ON")]]), { locked = true })
-hl.bind("XF86MonBrightnessUp",   hl.dsp.exec_cmd("brightnessctl set 5%+"), { locked = true, repeating = true })
-hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("brightnessctl set 5%-"), { locked = true, repeating = true })
-hl.bind("XF86KbdBrightnessUp",   hl.dsp.exec_cmd("brightnessctl -d tpacpi::kbd_backlight set +1"), { locked = true, repeating = true })
-hl.bind("XF86KbdBrightnessDown", hl.dsp.exec_cmd("brightnessctl -d tpacpi::kbd_backlight set 1-"), { locked = true, repeating = true })
+hl.bind("XF86MonBrightnessUp",   hl.dsp.exec_cmd("brightnessctl -d intel_backlight set 5%+"), { locked = true, repeating = true })
+hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("brightnessctl -d intel_backlight set 5%-"), { locked = true, repeating = true })
+hl.bind("XF86KbdBrightnessUp",   hl.dsp.exec_cmd("brightnessctl -d platform::kbd_backlight set +1"), { locked = true, repeating = true })
+hl.bind("XF86KbdBrightnessDown", hl.dsp.exec_cmd("brightnessctl -d platform::kbd_backlight set 1-"), { locked = true, repeating = true })
 hl.bind("XF86AudioPlay",         hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
 hl.bind("XF86AudioNext",         hl.dsp.exec_cmd("playerctl next"),       { locked = true })
 hl.bind("XF86AudioPrev",         hl.dsp.exec_cmd("playerctl previous"),   { locked = true })
