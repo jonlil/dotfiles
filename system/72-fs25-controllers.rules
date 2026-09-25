@@ -20,9 +20,25 @@
 #
 # ## Tre fällor
 #
-# Filnamnet måste sortera FÖRE 73-seat-late.rules, som kör uaccess-builtinen:
-#     TAG=="uaccess|xaccess-*", ENV{MAJOR}!="", RUN{builtin}+="uaccess"
+# Filnamnet måste sortera MELLAN två systemregler - därav 72. Fönstret är smalt
+# och båda kanterna är lätta att missa:
+#
+#     70-uaccess.rules:61   SUBSYSTEM=="input", ENV{ID_INPUT_JOYSTICK}=="?*",
+#                           TAG+="uaccess"
+#     73-seat-late.rules:16 TAG=="uaccess|xaccess-*", ENV{MAJOR}!="",
+#                           RUN{builtin}+="uaccess"
+#
 # Heter regeln 99-* har builtinen redan kört och TAG-="uaccess" kommer för sent.
+# Men heter den 70-fs25-* sorterar den FÖRE 70-uaccess.rules ('f' < 'u'), som
+# då hinner sätta tillbaka taggen efter att vi tagit bort den. Det felet är
+# nästan osynligt, för MODE="0600" tar ändå - det är ACL:en som läcker:
+#
+#     crw-------+  user:jonas:rw-   <- uaccess-builtinen, spelet kommer åt den
+#
+# Att bryggan senare kör chmod 0600 råkar nolla ACL-masken och stänga hålet,
+# men den kommer sekunder efter att enheten dykt upp. Med spelet igång hinner
+# Wine se originalet i det fönstret och stämpla det som XInput - och då byter
+# spelet profil mitt i körningen. Uppmätt när USB-sladden sattes i för laddning.
 #
 # DEVPATH!="*/virtual/input/*" undantar bryggans EGNA enheter, som har samma
 # vendor och product. uinput lägger dem under /devices/virtual/input/, medan
@@ -32,15 +48,25 @@
 #     fysisk BT   /devices/virtual/misc/uhid/0005:057E:2009.0028/input/input90/event31
 #     bryggans    /devices/virtual/input/input113/event30
 #
-# Matchningen sker på KERNELS och inte på ATTRS{id/vendor}. Attributen sitter på
-# en förälder som inte alltid hunnit dyka upp när noden skapas - för uhid-enheter
-# som bluez skapar (Bluetooth) förlorar regeln den kapplöpningen, och enheten
-# blir kvar med udevs standardrättigheter. Samma enhet på USB fungerade, vilket
-# gjorde felet svårt att se.
+# Matchningen sker på DEVPATH och inget annat. Både ATTRS{id/vendor} och KERNELS
+# kräver att udev vandrar uppåt i enhetsträdet, och för uhid-enheter som bluez
+# skapar är föräldern inte på plats i tid - regeln matchar då inte vid ADD, och
+# enheten blir kvar med udevs standardrättigheter (crw-rw---- root input).
 #
-# KERNELS-strängen är däremot en del av sökvägen själv och finns direkt. Den
-# innehåller dessutom bussprefixet, så globen täcker båda: 0003 är USB, 0005 är
-# Bluetooth. OBS versaler - KERNELS ger "057E", inte "057e".
+# Det är lömskt att felsöka: `udevadm test` kör mot nuvarande tillstånd, när
+# föräldern hunnit dyka upp, så regeln ser ut att matcha. Och på USB matchar den
+# faktiskt. Felet syns bara på Bluetooth, och bara efter en omstart.
+#
+# DEVPATH är enhetens egen sökväg och finns alltid direkt:
+#     bluetooth  /devices/virtual/misc/uhid/0005:057E:2009.000A/input/input35/event30
+#     usb        /devices/pci0000:80/.../0003:057E:2009.0030/input/input109/event258
+#     bryggans   /devices/virtual/input/input37/event31
+#
+# Globen 000?:VVVV:PPPP täcker båda bussarna - 0003 är USB, 0005 Bluetooth - och
+# matchar aldrig bryggans egen enhet, som saknar hid-id i sin sökväg. Därför
+# behövs inte längre något undantag för /virtual/input/.
+#
+# OBS versaler: sökvägen innehåller "057E", inte "057e".
 #
 # ## Verifiera
 #
@@ -56,18 +82,18 @@
 # att spelet ska visa Nintendos knappetiketter i stället för Xbox.
 
 # --- Saitek Heavy Equipment Side Panel -------------------------------------
-SUBSYSTEM=="input", KERNEL=="event*|js*", DEVPATH!="*/virtual/input/*", \
-  KERNELS=="000?:0738:2218.*", \
+SUBSYSTEM=="input", KERNEL=="event*|js*", \
+  DEVPATH=="*/000?:0738:2218.*/input/*", \
   TAG-="uaccess", MODE="0600", OWNER="root"
 
-SUBSYSTEM=="hidraw", KERNELS=="000?:0738:2218.*", \
+SUBSYSTEM=="hidraw", DEVPATH=="*/000?:0738:2218.*/hidraw/*", \
   TAG-="uaccess", MODE="0600", OWNER="root"
 
 # --- Nintendo Switch Pro Controller ----------------------------------------
 # Glob på bussprefixet gör regeln bussoberoende: 0003 är USB, 0005 Bluetooth.
-SUBSYSTEM=="input", KERNEL=="event*|js*", DEVPATH!="*/virtual/input/*", \
-  KERNELS=="000?:057E:2009.*", \
+SUBSYSTEM=="input", KERNEL=="event*|js*", \
+  DEVPATH=="*/000?:057E:2009.*/input/*", \
   TAG-="uaccess", MODE="0600", OWNER="root"
 
-SUBSYSTEM=="hidraw", KERNELS=="000?:057E:2009.*", \
+SUBSYSTEM=="hidraw", DEVPATH=="*/000?:057E:2009.*/hidraw/*", \
   TAG-="uaccess", MODE="0600", OWNER="root"

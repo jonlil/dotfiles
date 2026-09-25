@@ -163,7 +163,7 @@ Den sjunde axeln är ofarlig för matchningen: spelet mappar på **fysiskt
 axelnamn, inte antal**. Rattens definition har 7 `axisMapping` för en enhet med
 6 axlar och mappar `physical="Y"` två gånger (ACC och BRK).
 
-**`system/70-fs25-controllers.rules`** gör den fysiska panelen root-only.
+**`system/72-fs25-controllers.rules`** gör den fysiska panelen root-only.
 Två enheter med samma vendor/product kolliderar i Wine - den fysiska vinner och
 tar med sig XInput-klassningen. Att bara ta bort `ID_INPUT_JOYSTICK` räcker
 inte: `lnxev_device_create()` har inget taggfilter alls, den skapar en HID-enhet
@@ -326,7 +326,7 @@ andra spel och skrivbordet. Det är priset för att spelet ska visa Nintendos
 knappetiketter i stället för Xbox.
 
 Vill man hellre ha kontrollen tillgänglig överallt: ta bort dess två rader ur
-`system/70-fs25-controllers.rules` och kör bryggan med bara panelen,
+`system/72-fs25-controllers.rules` och kör bryggan med bara panelen,
 `joystick-bridge saitek-panel`. Kontrollen hamnar då i XInput, får hela den
 generiska gamepad-profilen och fungerar - bara med Xbox-etiketter, så att A och
 B står omkastade mot trycket.

@@ -23,9 +23,37 @@ PFX="${1:-}"
 shift || true
 
 if [ $# -eq 0 ]; then
+    # Listar varje INSTANS, inte bara vendor och product, och bade Enum- och
+    # DeviceClasses-posterna.
+    #
+    # DeviceClasses ar det som betyder nagot: det ar dar symlankarna bor, och
+    # det ar dem rawinput raknar upp. En enhet kan ha flera instanser dar, och
+    # de doda blockerar den levande - spelet hoppar over hela vendor/product
+    # nar nagon av dem inte gar att oppna.
+    #
+    # En tidigare version visade bara "VID_057E&PID_2009" som en rad, vilket
+    # dolde att det fanns elva poster varav tio var spoken. Undernycklar
+    # (Device Parameters, Properties) utelamnas - de sager inget.
     echo "Enhetsposter i prefixet:"
-    grep -ohE 'Enum\\\\(HID|WINEBUS)\\\\VID_[0-9A-Fa-f]+&PID_[0-9A-Fa-f]+[^]\\]*' \
-        "$PFX/system.reg" 2>/dev/null | sort -u | sed 's/^/  /'
+    {
+        grep -ohE '^\[System\\+ControlSet001\\+Enum\\+(HID|WINEBUS)\\+VID_[^]]*\]' \
+            "$PFX/system.reg" 2>/dev/null \
+            | sed -E 's/^\[System\\+ControlSet001\\+Enum\\+//; s/\]$//'
+        grep -ohE '##\?#HID#VID_[0-9A-Fa-f]+&PID_[^]#]*' \
+            "$PFX/system.reg" 2>/dev/null \
+            | sed -E 's/^##\?#/DeviceClasses  /'
+    } \
+        | sed -E 's/\\\\/\\/g' \
+        | grep -vE '\\(Device Parameters|Properties|#)' \
+        | sort -u \
+        | while IFS= read -r entry; do
+            case "$entry" in
+                # IG_ och XI_ ar Wines XInput-markeringar. En enhet som fatt dem
+                # har klassats som gamepad, och posten blockerar den rena.
+                *'&IG_'*|*'&XI_'*) echo "  $entry   <- SPOKE, XInput-markerad" ;;
+                *) echo "  $entry" ;;
+            esac
+        done
     echo
     echo "Ange VID:PID for att ta bort, t.ex. $0 $PFX 0738:2218"
     exit 0

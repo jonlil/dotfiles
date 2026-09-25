@@ -161,7 +161,7 @@ product. The discriminator is the device path: uinput devices live under
 `/devices/virtual/input/`, while Bluetooth ones are under
 `/devices/virtual/misc/uhid/` and USB ones under `/devices/pci*/usb*`.
 
-`/etc/udev/rules.d/70-fs25-controllers.rules`:
+`/etc/udev/rules.d/72-fs25-controllers.rules`:
 
     SUBSYSTEM=="input", KERNEL=="event*|js*", DEVPATH!="*/virtual/input/*", \
       ATTRS{id/vendor}=="0738", ATTRS{id/product}=="2218", \

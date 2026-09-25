@@ -68,6 +68,7 @@ Se system/gaming.md för hela historien med mätningar.
 import fcntl
 import os
 import select
+import signal
 import struct
 import sys
 import time
@@ -414,10 +415,92 @@ def centre(spec, dst, src_fd):
     emit(dst, EV_SYN, SYN_REPORT, 0)
 
 
+def release_all(spec, dst):
+    """Slapper varje knapp och nollstaller hattarna.
+
+    Anvands nar kallan forsvinner men den virtuella enheten star kvar. Utan det
+    ligger allt som rakade vara intryckt kvar som intryckt for alltid, eftersom
+    uppslappningen skickades av en enhet som inte finns langre.
+
+    Axlarna lamnas dar de star: de har redan ett giltigt vilolage fran centre(),
+    och att slanga tillbaka dem mitt i ett spel skulle markas mer an att de
+    ligger stilla.
+    """
+    for _, dstcode in spec["buttons"]:
+        emit(dst, EV_KEY, dstcode, 0)
+    for axis in spec["hats"]:
+        emit(dst, EV_ABS, axis, 0)
+    emit(dst, EV_SYN, SYN_REPORT, 0)
+
+
+def hide_from_wine(path):
+    """Ser till att originalet ar oläsbart for alla utom root.
+
+    system/70-fs25-controllers.rules gor normalt det har, men regeln har visat
+    sig kunna missa vid uppstart: udev processar noden innan alla beroenden ar
+    pa plats, och enheten blir kvar med standardrattigheterna. Felet syns bara
+    pa bluetooth och bara efter en omstart, och `udevadm test` visar inget
+    eftersom den kor mot ett senare tillstand.
+
+    Bryggan kor som root och vet exakt vilken enhet den speglar, sa den kan
+    sakerstalla det sjalv. Loggar nar den behovde ingripa - da vet vi att
+    regeln missade igen.
+
+    Aven hidraw-syskonet maste doljas: Wine foredrar den noden nar den finns,
+    och dar ligger enhetens akta HID-deskriptor.
+    """
+    if os.geteuid() != 0:
+        print(f"varning: kor inte som root, kan inte dolja {path}",
+              file=sys.stderr, flush=True)
+        return
+
+    targets = [path]
+    node = os.path.basename(path)
+    hid_dir = os.path.dirname(os.path.dirname(
+        os.path.realpath(f"/sys/class/input/{node}")))
+    hidraw_dir = os.path.join(hid_dir, "hidraw")
+    if os.path.isdir(hidraw_dir):
+        targets += [f"/dev/{n}" for n in os.listdir(hidraw_dir)]
+
+    for target in targets:
+        try:
+            mode = os.stat(target).st_mode & 0o777
+        except OSError:
+            continue
+        if mode != 0o600:
+            try:
+                os.chmod(target, 0o600)
+            except OSError as exc:
+                print(f"varning: kunde inte dolja {target}: {exc}",
+                      file=sys.stderr, flush=True)
+                continue
+            print(f"dolde {target} (udev-regeln missade, stod pa {mode:04o})",
+                  flush=True)
+
+
 class Mirror:
+    """En virtuell joystick och den fysiska kalla som for tillfallet driver den.
+
+    Kallan och den virtuella enheten har MEDVETET olika livslangd. Enheten
+    skapas en gang och rivs forst nar bryggan avslutas; kallan far komma och ga
+    under tiden.
+
+    Det ar inte en detalj, utan hela poangen. Kopplar man in laddsladden byter
+    kontrollern buss - bluetooth-noden forsvinner och en USB-nod dyker upp med
+    samma vendor och product. Rev vi den virtuella enheten da, sag ett igangvarande
+    spel sin joystick forsvinna och en frammande enhet dyka upp nagra sekunder
+    senare, och matchade om mot fel profil. Uppmatt:
+
+        20:32:47  originalet forsvann          <- virtuell enhet revs
+        20:32:50  speglar /dev/input/event8    <- ny enhet, nytt id i Wine
+
+    Genom att lata uinput-enheten sta kvar marker spelet ingenting alls av
+    bussbytet - den slutar bara ta emot handelser i tre sekunder.
+    """
+
     def __init__(self, spec, path):
         self.spec = spec
-        self.path = path
+        self.path = None
         self.remap = dict(spec["buttons"])
         self.axes = set(spec["axes"]) | set(spec["hats"])
         # Mitt och troskel per axel, for dodzonen. Hattarna hoppas over - de ar
@@ -434,16 +517,9 @@ class Mirror:
                     lo, hi = info[1], info[2]
                 self.centre_of[axis] = ((lo + hi) // 2, (hi - lo) / 2, dz,
                                         spec.get("curve", 1.0))
-        self.src = os.open(path, os.O_RDONLY)
-        try:
-            self.dst = open_uinput(spec, self.src)
-            centre(spec, self.dst, self.src)
-        except Exception:
-            os.close(self.src)
-            raise
-        print(f"{spec['id']}: speglar {path} -> uinput-joystick, "
-              f"{len(spec['axes']) + len(spec['extra_axes'])} axlar, "
-              f"{len(spec['buttons'])} knappar", flush=True)
+        self.src = None
+        self.dst = None
+        self.attach(path)
         if spec.get("deadzone", 0.0) > 0:
             if self.centre_of:
                 trosklar = ", ".join(
@@ -455,8 +531,74 @@ class Mirror:
                 print(f"{spec['id']}: VARNING dodzon {spec['deadzone']} begard "
                       f"men ingen troskel kunde beraknas", flush=True)
 
+    @property
+    def live(self):
+        """Sant nar en kalla ar kopplad. Falskt mellan att sladden byts."""
+        return self.src is not None
+
+    def attach(self, path):
+        """Kopplar en fysisk kalla till den virtuella enheten.
+
+        Forsta gangen skapas aven enheten. Axelomradena las da in fran kallan
+        och behalls sedan, aven om en senare kalla skulle rapportera andra -
+        att andra dem skulle kravt att enheten byggdes om, vilket ar precis det
+        vi undviker.
+        """
+        hide_from_wine(path)
+        src = os.open(path, os.O_RDONLY)
+        try:
+            if self.dst is None:
+                self.dst = open_uinput(self.spec, src)
+                print(f"{self.spec['id']}: speglar {path} -> uinput-joystick, "
+                      f"{len(self.spec['axes']) + len(self.spec['extra_axes'])} axlar, "
+                      f"{len(self.spec['buttons'])} knappar", flush=True)
+            else:
+                print(f"{self.spec['id']}: ny kalla {path}, virtuell enhet "
+                      f"behalls", flush=True)
+            centre(self.spec, self.dst, src)
+        except Exception:
+            os.close(src)
+            raise
+        self.src = src
+        self.path = path
+
+    def detach(self):
+        """Kallan forsvann. Enheten star kvar, men slappt och centrerad.
+
+        Slapper vi inte knapparna har fastnar det som rakade vara intryckt nar
+        sladden gick i - spelet har ingen anledning att tro att nagot andrats.
+        """
+        if self.src is not None:
+            try:
+                os.close(self.src)
+            except OSError:
+                pass
+            self.src = None
+        if self.dst is not None:
+            release_all(self.spec, self.dst)
+        print(f"{self.spec['id']}: kallan {self.path} forsvann, virtuell enhet "
+              f"star kvar", flush=True)
+        self.path = None
+
     def pump(self):
-        """Returnerar False nar originalet forsvunnit."""
+        """Returnerar False nar originalet forsvunnit.
+
+        Kallans SYN_REPORT vidarebefordras, i stallet for att bryggan satter en
+        egen sist i varje last block. Skillnaden ar inte kosmetisk:
+
+        En handelsestrom ar indelad i ramar, och en ram ar ett tillstand som
+        hor ihop. os.read() returnerar dock det som rakar ligga i buffern, vilket
+        kan vara en halv ram eller fem hela. Klistrade vi ihop allt till en enda
+        ram slogs flera tillstand samman, och kärnan behaller bara det sista
+        vardet per axel - ett snabbt tryck pa pilkorset kunde forsvinna helt,
+        och HAT0X fran en ram plus HAT0Y fran nasta blev en diagonal som aldrig
+        tryckts. Det gav bortfall som berodde pa hur buffern rakade delas, vilket
+        ar i det narmaste omojligt att felsoka.
+
+        Slutar blocket mitt i en ram skickas INGEN SYN. Handelserna ligger kvar
+        oavslutade hos uinput och committas nar nasta block levererar ramens
+        riktiga slut. Att avsluta en halv ram vore just det fel vi tar bort.
+        """
         try:
             data = os.read(self.src, EVENT_SIZE * 64)
         except OSError:
@@ -476,21 +618,26 @@ class Mirror:
                     value = shape(value, cz[0], cz[1], cz[2], cz[3])
                 emit(self.dst, EV_ABS, code, value)
                 dirty = True
-        if dirty:
-            emit(self.dst, EV_SYN, SYN_REPORT, 0)
+            elif etype == EV_SYN and code == SYN_REPORT and dirty:
+                # Kallans egen ramgrans, vidarebefordrad som den ar.
+                emit(self.dst, EV_SYN, SYN_REPORT, 0)
+                dirty = False
         return True
 
     def close(self):
+        """River den virtuella enheten. Bara vid avslut - inte nar kallan gar."""
         try:
             fcntl.ioctl(self.dst, UI_DEV_DESTROY)
         except OSError:
             pass
         for fd in (self.dst, self.src):
+            if fd is None:
+                continue
             try:
                 os.close(fd)
             except OSError:
                 pass
-        print(f"{self.spec['id']}: originalet forsvann", flush=True)
+        print(f"{self.spec['id']}: virtuell enhet riven", flush=True)
 
 
 def main():
@@ -502,33 +649,54 @@ def main():
         print(f"kanda: {', '.join(s['id'] for s in DEVICES)}", file=sys.stderr)
         return 2
 
+    # systemd skickar SIGTERM vid stopp. Karnan river visserligen uinput-enheter
+    # nar processen dor, men en uttrycklig avveckling gor loggen begriplig och
+    # skiljer ett rent stopp fran en krasch.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+
     mirrors = {}
+    try:
+        return run(specs, mirrors)
+    finally:
+        for mirror in mirrors.values():
+            mirror.close()
+
+
+def run(specs, mirrors):
     next_scan = 0.0
     while True:
         now = time.monotonic()
         if now >= next_scan:
             next_scan = now + RESCAN_SECONDS
             for spec in specs:
-                if spec["id"] in mirrors:
+                mirror = mirrors.get(spec["id"])
+                if mirror is not None and mirror.live:
                     continue
                 path = find_source(spec)
                 if not path:
                     continue
                 try:
-                    mirrors[spec["id"]] = Mirror(spec, path)
+                    if mirror is None:
+                        mirrors[spec["id"]] = Mirror(spec, path)
+                    else:
+                        # Enheten finns redan sedan forra sladden - koppla bara
+                        # om kallan, sa att spelet aldrig ser den forsvinna.
+                        mirror.attach(path)
                 except OSError as exc:
                     print(f"{spec['id']}: {exc}", file=sys.stderr, flush=True)
 
-        if not mirrors:
+        fds = {m.src: key for key, m in mirrors.items() if m.live}
+        if not fds:
             time.sleep(1)
             continue
 
-        fds = {m.src: key for key, m in mirrors.items()}
         ready, _, _ = select.select(list(fds), [], [], 1.0)
         for fd in ready:
             key = fds[fd]
             if not mirrors[key].pump():
-                mirrors.pop(key).close()
+                # Spegeln ligger kvar i mirrors utan kalla, och nasta skanning
+                # kopplar om den. Den virtuella enheten rivs aldrig har.
+                mirrors[key].detach()
 
 
 if __name__ == "__main__":
