@@ -205,6 +205,90 @@ DEVICES = [
         #   2.0  kraftigt         30 % spak ->  4,2 %
         "curve": 1.5,
     },
+    {
+        # Nintendo Switch 2 Pro Controller. Kors av drivrutinen switch2, inte
+        # hid-nintendo, och ar INTE samma enhet som den ovan trots slaktskapet:
+        #
+        #   Switch 1 (2009)   14 knappar,  BTN_Z ar Capture
+        #   Switch 2 (2069)   17 knappar,  BTN_C tillkommer, BTN_Z borta,
+        #                     Capture ligger pa KEY_RECORD, och tva paddlar
+        #                     pa baksidan har fatt namnlosa koder
+        #
+        # Axellayouten ar daremot identisk, sa ABS_Z-utfyllnaden nedan behovs
+        # av exakt samma skal som for Switch 1.
+        "id": "pro-controller-2",
+        "match": (0x057E, 0x2069),
+        "version": 0x0111,              # samma som originalet rapporterar
+        # Spelet har ingen profil for 2069 - NintendoSwitchProController.xml
+        # namner bara productId 2009. Men samma fil har ocksa:
+        #
+        #   <productName vendorId="057E">
+        #       <keyword text="pro" /><keyword text="controller" />
+        #
+        # Namnet nedan innehaller bada nyckelorden, sa OM den vagen ar ett
+        # alternativ till productKey och inte ett extra villkor matchar
+        # enheten Nintendo-profilen anda. Det gick inte att avgora ur datan:
+        # alla 72 profiler har bada blocken, ingen har bara det ena.
+        #
+        # Skulle det visa sig att spelet inte matchar, byt "match" till
+        # (0x057E, 0x2009) och "version" till 0x8001, sa forkladds den som en
+        # Switch 1-kontroller. Da far den dock INTE anvandas samtidigt som
+        # pro-controller ovan - tva enheter med samma id krockar i Wine.
+        "name": b"Switch 2 Pro Controller",
+        # Samma ordning som Switch 1: profilen vill ha 0=B 1=A 2=Y 3=X, vilket
+        # inte ar evdev-koderna sorterade. Se den langa kommentaren dar.
+        "buttons": [
+            (0x130, BTN_JOYSTICK + 0),    # BTN_SOUTH  -> B
+            (0x131, BTN_JOYSTICK + 1),    # BTN_EAST   -> A
+            (0x134, BTN_JOYSTICK + 2),    # BTN_WEST   -> Y
+            (0x133, BTN_JOYSTICK + 3),    # BTN_NORTH  -> X
+            (0x136, BTN_JOYSTICK + 4),    # BTN_TL     -> LB (L)
+            (0x137, BTN_JOYSTICK + 5),    # BTN_TR     -> RB (R)
+            (0x138, BTN_JOYSTICK + 6),    # BTN_TL2    -> LT (ZL)
+            (0x139, BTN_JOYSTICK + 7),    # BTN_TR2    -> RT (ZR)
+            (0x13a, BTN_JOYSTICK + 8),    # BTN_SELECT -> -
+            (0x13b, BTN_JOYSTICK + 9),    # BTN_START  -> +
+            # Korsade av samma skal som pa Switch 1: profilen mappar
+            # physical 10 -> logical 11 och physical 11 -> logical 10, sa
+            # kameraknappen hamnar pa hoger spak precis som pa ovriga pads.
+            (0x13e, BTN_JOYSTICK + 10),   # BTN_THUMBR -> hamnar pa logisk 11
+            (0x13d, BTN_JOYSTICK + 11),   # BTN_THUMBL -> hamnar pa logisk 10
+            # Utanfor profilens tolv platser, men bindbara i spelet.
+            (0x13c, BTN_JOYSTICK + 12),   # BTN_MODE   -> Home
+            (0x132, BTN_JOYSTICK + 13),   # BTN_C      -> C, ny pa Switch 2
+            # Paddlarna saknar namn i input.h - switch2-drivrutinen tog tva
+            # lediga koder direkt efter BTN_DPAD_RIGHT (0x223). Uppmatt genom
+            # att trycka pa dem, inte gissat.
+            (0x224, BTN_JOYSTICK + 14),   # GL, vanstra paddeln
+            (0x225, BTN_JOYSTICK + 15),   # GR, hogra paddeln
+            # BTN_JOYSTICK-omradet ar slut vid +15 (0x12f), sa den sista far
+            # ligga pa TRIGGER_HAPPY. Hogre kod betyder hogre knappnummer, sa
+            # den hamnar sist och rubbar inte de ovriga.
+            (0x0a7, TRIGGER_HAPPY + 0),   # KEY_RECORD -> Capture
+        ],
+        "axes": [0x00, 0x01, 0x03, 0x04],   # X, Y, RX, RY - profilens fyra
+        "extra_axes": [0x02],               # ABS_Z, utfyllnad sa RX/RY hamnar ratt
+        "hats": [0x10, 0x11],
+        "axis_range": None,                 # ta omradet fran originalet
+        # Uppmatt vilolage pa en fabriksny kontroller, orord i 10 sekunder:
+        #
+        #   X   +363    1,11 %      brus 0,04 %
+        #   Y  -1160    3,54 %      brus 0,09 %
+        #   RX +2130    6,50 %      brus 0,10 %   <- varst
+        #   RY  -497    1,51 %      brus 0,07 %
+        #
+        # Spakarna ar alltsa stabila - bruset ar en tiondels procent - men
+        # statiskt snedstallda. Dodzonen maste darfor tacka 6,50 %, och 0.09
+        # ger drygt en tredjedels marginal. Den ar avsiktligt snavare an
+        # Switch 1:as 0.12, vars spakar ar slitna.
+        #
+        # Karnan deklarerar flat=128, alltsa 0,39 %, vilket inte racker - och
+        # FS25 ignorerar absflat oavsett.
+        "deadzone": 0.09,
+        # Samma skal som for Switch 1: spaken ar for kanslig for styrning
+        # jamfort med ratt. Se kommentaren dar for underlaget.
+        "curve": 1.5,
+    },
 ]
 
 UI_SET_EVBIT = 0x40045564
@@ -425,6 +509,25 @@ def release_all(spec, dst):
     Axlarna lamnas dar de star: de har redan ett giltigt vilolage fran centre(),
     och att slanga tillbaka dem mitt i ett spel skulle markas mer an att de
     ligger stilla.
+
+    ## Vart att se over i framtiden
+
+    Att slappa allt ar trubbigt. Tappas kallan en halv sekund medan du haller
+    gasen skickar vi ett slapp, och nar den kommer tillbaka skickar drivrutinen
+    INGEN ny nedtryckning - ur dess synvinkel har ingenting andrats. Spelet tror
+    da att du slappt gasen tills du trycker om.
+
+    Ratt beteende vore att lasa av kallans faktiska knappläge vid aterkoppling
+    med EVIOCGKEY och aterskapa det, i stallet for att blint nolla allt har.
+    Da skulle en kort lucka i bluetooth-lanken bli osynlig for spelet.
+
+    Alternativet att INTE slappa ar dock samre: da fastnar det som rakade vara
+    intryckt for alltid, eftersom uppslappningen skickades av en enhet som inte
+    finns langre. Sa tills EVIOCGKEY-vagen ar byggd star den har kvar.
+
+    Uppmatt 2026-09-27: en enda kallforlust pa 1,5 dygn, och den intraffade
+    nattetid nar kontrollern somnade - inte under spel. Risken ar alltsa verklig
+    men ovanlig.
     """
     for _, dstcode in spec["buttons"]:
         emit(dst, EV_KEY, dstcode, 0)

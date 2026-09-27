@@ -97,3 +97,14 @@ SUBSYSTEM=="input", KERNEL=="event*|js*", \
 
 SUBSYSTEM=="hidraw", DEVPATH=="*/000?:057E:2009.*/hidraw/*", \
   TAG-="uaccess", MODE="0600", OWNER="root"
+
+# --- Nintendo Switch 2 Pro Controller --------------------------------------
+# Egen produkt-id, egen drivrutin (switch2 i stället för hid-nintendo) och tre
+# knappar till - men samma behov av att hållas undan Wine. Uppmätt sökväg:
+#     fysisk USB  /devices/pci0000:80/.../0003:057E:2069.001A/input/input.../event27
+SUBSYSTEM=="input", KERNEL=="event*|js*", \
+  DEVPATH=="*/000?:057E:2069.*/input/*", \
+  TAG-="uaccess", MODE="0600", OWNER="root"
+
+SUBSYSTEM=="hidraw", DEVPATH=="*/000?:057E:2069.*/hidraw/*", \
+  TAG-="uaccess", MODE="0600", OWNER="root"
