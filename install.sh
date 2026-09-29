@@ -57,6 +57,15 @@ if systemctl --user list-unit-files gcr-ssh-agent.socket >/dev/null 2>&1; then
     echo "LINK: gcr-ssh-agent.socket enabled"
 fi
 
+# Toggl-daemonen som waybar-toggl läser från. Aktiveras först när paketet är
+# installerat (install-aur) - annars startar den om i all oändlighet.
+link "$DOTFILES/systemd/toggl-track-track.service" "$HOME/.config/systemd/user/toggl-track-track.service"
+if command -v toggl-track-track >/dev/null 2>&1; then
+    systemctl --user daemon-reload
+    systemctl --user enable toggl-track-track.service
+    echo "LINK: toggl-track-track.service enabled"
+fi
+
 # oh-my-zsh (zshrc kräver den). Klonas direkt istället för via den officiella
 # installern, eftersom den senare skriver över ~/.zshrc utan --keep-zshrc.
 if [ ! -s "$HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then

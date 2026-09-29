@@ -1,0 +1,22 @@
+[Unit]
+# Daemonen bakom Toggl-modulen i waybar och kortet i eww. Den lyssnar på Toggls
+# WebSocket och skriver händelser till $XDG_RUNTIME_DIR/toggl-track-track.sock,
+# som scripts/waybar-toggl läser. Utan tjänsten står waybar på "Väntar på...".
+Description=Toggl Track-händelser till waybar och eww
+Documentation=https://github.com/Mange/toggl-track-track
+
+[Service]
+# Daemonen loggar in med e-post och lösenord, inte med API-token. Lösenordet
+# ligger i gnome-keyring (upplåst av pam-greetd vid inloggning) och lagras med:
+#   secret-tool store --label="Toggl Track" service toggl-track-track type password
+# E-posten läggs i ~/.config/toggl-track-track.env som TTT_EMAIL=...
+EnvironmentFile=%h/.config/toggl-track-track.env
+ExecStart=/bin/sh -c 'TTT_PASSWORD="$(secret-tool lookup service toggl-track-track type password)" exec toggl-track-track --socket default --verbose'
+
+# Nyckelringen kan vara låst och nätet nere precis efter inloggning. Försök igen
+# i stället för att ge upp.
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=default.target
