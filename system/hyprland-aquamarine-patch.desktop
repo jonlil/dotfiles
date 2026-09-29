@@ -1,0 +1,26 @@
+[Desktop Entry]
+# Sessionsval för att köra Hyprland mot ett lokalt byggt aquamarine i stället för
+# systemets /usr/lib/libaquamarine.so.14. Byggd kopia har samma soname och version,
+# så LD_LIBRARY_PATH räcker - inget behöver skrivas över i /usr.
+#
+# Sessionen bygger INGENTING - den laddar bara det som redan ligger i build/.
+# Efter varje kodändring måste den byggas om för hand, annars startar sessionen
+# tyst mot den gamla binären:
+#   cmake --build ~/Projects/hyprwm/aquamarine/build -j$(nproc)
+# Första gången krävs dessutom ett configure-steg:
+#   cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
+#
+# AQ_DRM_DEVICES_OVERRIDE är samma variabel som "Hyprland (NVIDIA primär)" sätter;
+# hypr/hyprland.lua läser den och vänder GPU-ordningen. Den är med här för att
+# TV:n hänger på dGPU:n, så testerna körs under samma förhållanden som spel.
+# Utan den gäller intel-igpu först, alltså vardagsordningen.
+#
+# Saknas build-katalogen ignoreras LD_LIBRARY_PATH tyst och sessionen startar mot
+# systembiblioteket. Kontrollera därför vilket som faktiskt laddades:
+#   grep -o '/[^ ]*libaquamarine[^ ]*' /proc/$(pgrep -x Hyprland)/maps | sort -u
+Name=Hyprland (NVIDIA primär + patchad aquamarine)
+Comment=Som NVIDIA-sessionen, men mot lokalt byggt aquamarine - för att testa DRM-patchar
+Exec=env AQ_DRM_DEVICES_OVERRIDE=/dev/dri/nvidia-dgpu:/dev/dri/intel-igpu LD_LIBRARY_PATH=/home/jonas/Projects/hyprwm/aquamarine/build /usr/bin/start-hyprland
+Type=Application
+DesktopNames=Hyprland
+Keywords=tiling;wayland;compositor;
