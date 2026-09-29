@@ -22,6 +22,10 @@ CALENDARS = [
     {"name": "Philip", "url": _get_secret("philip"), "color": "peach"},
     {"name": "Privat", "url": _get_secret("privat"), "color": "blue"},
     {"name": "GaN", "url": _get_secret("gan"), "color": "green"},
+    # Zoezi (CrossFit-passen) prenumereras på i Google Calendar, men Privats
+    # iCal-adress innehåller bara den egna kalendern - inte prenumerationer.
+    # Därför hämtas Zoezis flöde direkt.
+    {"name": "CrossFit", "url": _get_secret("zoezi"), "color": "mauve"},
 ]
 
 TZ = ZoneInfo("Europe/Stockholm")
@@ -180,7 +184,7 @@ WEEKDAYS_SV = {
 }
 
 # Which calendars go in "mine" vs "philip"
-MINE = {"Privat", "GaN"}
+MINE = {"Privat", "GaN", "CrossFit"}
 PHILIP = {"Philip"}
 
 
