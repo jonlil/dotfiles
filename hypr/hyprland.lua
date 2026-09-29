@@ -17,65 +17,93 @@ local laptopScaleDocked  = 1.6
 
 -- MSI hemma. Matchas på beskrivning: på Legion sitter den på nvidia-utgången DP-3,
 -- på förra datorn var den DP-1, och connector-numret kan flytta mellan portar.
-hl.monitor({ output = "desc:Microstep MSI MAG271CQR", mode = "2560x1440@144", position = "auto-left", scale = 1 })
+-- vrr = 2: adaptiv synk bara i fullskärm. Panelen är VA, och VA flimrar gärna
+-- när bildfrekvensen hoppar oregelbundet - vilket den gör på skrivbordet, med
+-- blinkande markör och enstaka scroll. I spel är takten jämnare och VRR ger
+-- det den ska: ingen tearing och lägre latens än VSync.
+hl.monitor({ output = "desc:Microstep MSI MAG271CQR", mode = "2560x1440@144", position = "auto-left", scale = 1, vrr = 2 })
 -- Tillfällig skärm hos Dinice (Philips 27M2N3500N via HDMI), matchas på beskrivning
 hl.monitor({ output = "desc:Philips Consumer Electronics Company 27M2N3500N", mode = "2560x1440@144", position = "auto-left", scale = 1 })
 -- Samsung-TV hemma (HDMI på nvidia-utgången). Ligger ovanför laptopen: musen
 -- går upp från laptopen till TV:n och ner från TV:n till laptopen.
--- 1080p@120 är taket med nuvarande kabel. Den är "High Speed" (HDMI 1.4,
--- ~340 MHz); 1080p@120 och 4K@30 ligger båda på 297 MHz och ryms, medan
--- 4K@60 kräver 594 MHz och inte går igenom. Av de två som ryms är 120 Hz
--- bättre för spel än 4K@30, som är ryckigt redan vid musrörelse.
 --
--- För 4K@60 krävs TVÅ saker, annars blir det svart skärm:
---   1. En Premium High Speed-kabel (18 Gbit/s). Ultra High Speed behövs inte,
---      TV:n taknar ändå på 600 MHz — 4K@120 kräver HDMI 2.1 och panelen är
---      en 2018:a.
---   2. "HDMI UHD Color" (Input Signal Plus) på för HDMI 4 i TV:ns meny.
---      Porten framgår av EDID: "Source physical address: 4.0.0.0".
--- Sätt då mode = "3840x2160@60" och scale = 2 (logiskt 1920x1080 — samma yta
--- som nu, dubbel pixeltäthet, heltalsskala så positionen nedan fortsatt stämmer).
+-- 2560x1440@120 kräver tre saker samtidigt. Tappas någon av dem serverar TV:n
+-- en EDID där läget inte ens finns, och Hyprland hamnar på 1080p:
+--   1. Premium High Speed-kabel (18 Gbit/s). Pixelklockan är 498 MHz, långt
+--      över vad en vanlig High Speed-kabel (~340 MHz) klarar.
+--   2. "HDMI UHD Color" / Input Signal Plus påslaget för HDMI 1 - porten som
+--      kabeln sitter i. Inställningen är per port, så rätt port spelar roll.
+--   3. Att Hyprland läser om modelistan EFTER att punkt 2 slagits på.
 --
--- Obs: Hyprland uppdaterar inte sin modelista när TV:n byter EDID. Sätter man
--- ett läge som inte står i `hyprctl monitors` availableModes loopar aquamarine
--- "atomic drm request: failed to commit: Invalid argument" och skärmen förblir
--- svart. Kontrollera att läget finns i listan innan mode ändras här.
+-- Punkt 3 är haken. UHD Color måste slås på för hand i TV:ns meny. När det är
+-- gjort byter TV:n EDID, och kerneln skickar mycket riktigt en udev-händelse
+-- med HOTPLUG=1 - uppmätt med `udevadm monitor --udev --property
+-- --subsystem-match=drm`, fyra händelser vid en av/på-växling. Aquamarine tar
+-- emot den och loggar "Got a hotplug event" och "Scanning connectors", men
+-- läser ändå inte om modelistan: den gör det bara för connectors som saknar en
+-- output, och TV:n förblir CONNECTED hela tiden. Symptomet är att kerneln
+-- listar 43 lägen (wc -l < /sys/class/drm/card*-HDMI-A-1/modes) medan Hyprland
+-- ser 38. Rapporterat som hyprwm/aquamarine#412.
+--
+-- Tvinga fram omläsningen - scripts/hdmi-reprobe gör samma sak:
+--   sudo sh -c 'C=$(ls -d /sys/class/drm/card*-HDMI-A-1 | head -1);
+--               echo off > "$C/status"; sleep 2; echo detect > "$C/status"'
+-- BÅDE off och detect behövs; enbart detect gör ingenting när connectorn redan
+-- står som frånkopplad. Kortnumret är inte stabilt mellan boots (card2 blev
+-- card1 efter en omstart), därav globben i stället för ett fast nummer.
+--
+-- Efter "off" tappar TV:n signalen och hoppar gärna till en annan ingång. Står
+-- den inte tillbaka på HDMI 1 när "detect" körs hittar kerneln ingen skärm och
+-- status fastnar på disconnected. Kontrollera resultatet med:
+--   hyprctl monitors -j | grep -c 2560x1440
+--
+-- Sätts ett läge som inte finns i availableModes faller Hyprland tillbaka och
+-- loggar "atomic drm request: failed to commit: Invalid argument". Kontrollera
+-- därför alltid mot `hyprctl monitors` innan mode ändras här.
+--
+-- position = "auto-up" och inte en uträknad y-koordinat: räknar man fram
+-- y ur mode/scale stämmer den bara så länge Hyprland faktiskt får det läget.
+-- Faller den tillbaka blir koordinaten kvar på det önskade värdet, och då
+-- uppstår ett glapp mellan skärmkanterna som musen inte kan ta sig över.
+-- auto-up lägger TV:n direkt ovanför laptopen oavsett vilket läge som gäller.
+--
 -- Matchas på "Samsung Electric Company", inte bara "Samsung" — den inbyggda
 -- panelen heter "Samsung Display Corp." och får inte träffas av samma regel.
--- Positionen räknas ut ur skalan: TV:n ska ligga precis ovanför laptopen, så
--- dess underkant måste hamna på y=0. Hårdkodas y-värdet istället glider det ur
--- synk så fort scale ändras, och då uppstår ett glapp mellan skärmarna som
--- varken musen eller SUPER+pil kan ta sig över.
--- 2560x1440@120 kräver två saker av TV:n, och båda kan tappas bort:
---   1. Input Signal Plus påslaget för den HDMI-ingång kabeln sitter i. Utan den
---      serverar TV:n en HDMI 1.4-EDID där läget inte ens finns.
---   2. En certifierad 18 Gbps-kabel - pixelklockan ligger på ~470 MHz, långt
---      över vad en vanlig High Speed-kabel (340 MHz) klarar.
--- Drar man ur kabeln glömmer TV:n punkt 1 och börjar om på 1.4. Ändra därför i
--- TV:ns meny med sladden i, och tvinga omläsningen från Linux i stället:
---   sudo sh -c 'echo off > /sys/class/drm/card2-HDMI-A-1/status; sleep 2;
---               echo detect > /sys/class/drm/card2-HDMI-A-1/status'
-local tvW, tvH, tvRefresh = 2560, 1440, 120
-local tvScale = 1     -- logiskt = fysiskt, inga omsamplingssteg. Måste gå jämnt ut.
 hl.monitor({
     output   = "desc:Samsung Electric Company SAMSUNG",
-    mode     = tvW .. "x" .. tvH .. "@" .. tvRefresh,
-    position = "0x-" .. math.floor(tvH / tvScale),
-    scale    = tvScale,
+    mode     = "2560x1440@120",
+    position = "auto-up",
+    scale    = 1,
 })
 
 -- Vid monitor.removed kan den frånkopplade skärmen fortfarande ligga kvar i
 -- hl.get_monitors(); exkludera den explicit när eventet ger oss namnet.
-local function hasExternalMonitor(excludeName)
+-- Connector-namnet på den inbyggda panelen är inte stabilt mellan boots: efter
+-- en omstart blev eDP-1 plötsligt eDP-2 när DRM:s kortnumrering flyttade sig
+-- (card2 -> card1). Med hårdkodat namn matchas laptopen inte alls, och då
+-- räknas dess egen panel som en extern skärm. Slå upp namnet på beskrivning,
+-- precis som de externa skärmarna ovan.
+local laptopDesc = "Samsung Display Corp. ATNA60HU01-0"
+local function laptopPanel()
     for _, m in ipairs(hl.get_monitors()) do
-        if m.name ~= "eDP-1" and m.name ~= excludeName then return true end
+        if m.description and m.description:find(laptopDesc, 1, true) then
+            return m.name
+        end
+    end
+    return "eDP-1"
+end
+
+local function hasExternalMonitor(excludeName)
+    local laptop = laptopPanel()
+    for _, m in ipairs(hl.get_monitors()) do
+        if m.name ~= laptop and m.name ~= excludeName then return true end
     end
     return false
 end
 
 local function applyLaptopScale(excludeName)
     hl.monitor({
-        output   = "eDP-1",
+        output   = laptopPanel(),
         mode     = laptopMode,
         position = "0x0",
         scale    = hasExternalMonitor(excludeName) and laptopScaleDocked or laptopScaleSolo,
@@ -311,9 +339,9 @@ hl.window_rule({ match = { class = "steam_app_2300320" },                       
 -- game.xml ligger i compatdata/<appid>/pfx/drive_c/users/steamuser/Documents/My Games/
 
 -- Dual monitor: communication on laptop, work on external
-hl.workspace_rule({ workspace = "1", monitor = "eDP-1" })
-hl.workspace_rule({ workspace = "2", monitor = "eDP-1" })
-hl.workspace_rule({ workspace = "8", monitor = "eDP-1" })
+hl.workspace_rule({ workspace = "1", monitor = laptopPanel() })
+hl.workspace_rule({ workspace = "2", monitor = laptopPanel() })
+hl.workspace_rule({ workspace = "8", monitor = laptopPanel() })
 
 -- Workspace 3-6 hamnar på den externa skärm som är inkopplad (plug and play).
 -- Prioritetsordning: MSI hemma, Philips hos Dinice, annars första externa skärmen.
@@ -336,11 +364,12 @@ local function preferredMonitor(excludeName)
     end
 
     -- Okänd extern skärm: ta första som inte är den inbyggda panelen.
+    local laptop = laptopPanel()
     for _, m in ipairs(monitors) do
-        if m.name ~= "eDP-1" and m.name ~= excludeName then return m.name end
+        if m.name ~= laptop and m.name ~= excludeName then return m.name end
     end
 
-    return "eDP-1"
+    return laptop
 end
 
 -- XWayland sätter ingen primary-utgång, och X11-appar faller då tillbaka på
@@ -361,7 +390,7 @@ end
 local function applyWorkWorkspaces(excludeName)
     local target = preferredMonitor(excludeName)
 
-    hl.workspace_rule({ workspace = "3", monitor = target, default = (target ~= "eDP-1") })
+    hl.workspace_rule({ workspace = "3", monitor = target, default = (target ~= laptopPanel()) })
     for _, ws in ipairs({ "4", "5", "6" }) do
         hl.workspace_rule({ workspace = ws, monitor = target })
     end

@@ -1,0 +1,37 @@
+#!/bin/sh
+# Tvingar kerneln att koppla ner och läsa om en DRM-connector.
+#
+# Varför det behövs: TV:n känns inte igen via CEC, så den slår inte på
+# "HDMI UHD Color" av sig själv - det måste göras för hand i TV:ns meny. När
+# det väl är gjort byter TV:n EDID (300 -> 600 MHz TMDS) utan att skicka någon
+# HPD-puls. Kerneln plockar upp den nya EDID:n, men Hyprland/aquamarine cachar
+# connectorns modelista och läser bara om den vid en riktig hotplug. Resultatet
+# är att kerneln listar 2560x1440@120 medan Hyprland fortfarande bara ser
+# 1080p-lägen, och 1440p går inte att välja.
+#
+# "off" + "detect" simulerar ur- och inkoppling på kernelnivå. Det ger den
+# hotplug Hyprland väntar på, utan att signalen bryts fysiskt - vilket är
+# poängen, för drar man ur sladden glömmer TV:n UHD-inställningen igen.
+set -eu
+
+connector=${1:-}
+if [ -z "$connector" ]; then
+    # Kortnumret är inte stabilt mellan boots (card2 blev card1), så matcha
+    # med glob i stället för ett fast nummer.
+    connector=$(ls -d /sys/class/drm/card*-HDMI-A-1 2>/dev/null | head -1)
+fi
+
+[ -n "$connector" ] && [ -e "$connector/status" ] || {
+    echo "hdmi-reprobe: hittar ingen HDMI-connector" >&2
+    exit 1
+}
+
+[ "$(id -u)" -eq 0 ] || {
+    echo "hdmi-reprobe: måste köras som root" >&2
+    exit 1
+}
+
+echo off    > "$connector/status"
+sleep 2
+echo detect > "$connector/status"
+echo "hdmi-reprobe: $(basename "$connector") omläst"
