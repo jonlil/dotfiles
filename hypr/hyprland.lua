@@ -318,7 +318,16 @@ end
 ---- WINDOWS AND WORKSPACES ----
 --------------------------------
 
-hl.window_rule({ match = { class = "Slack" },                                                  workspace = "1 silent" })
+-- kitty sparar "window-state": "maximized" i ~/.cache/kitty/main.json och ber
+-- om maximize vid start. Utan den här regeln hamnade nya terminaler i
+-- helskärm istället för i en split.
+hl.window_rule({
+    name  = "suppress-maximize-events",
+    match = { class = ".*" },
+    suppress_event = "maximize",
+})
+
+hl.window_rule({ match = { class = "Slack" },                                                workspace = "1 silent" })
 hl.window_rule({ match = { class = "chrome-fmgjjmmmlfnkbppncabfkddbjimcfncm-Default" },        workspace = "2 silent" })
 hl.window_rule({ match = { class = "google-chrome" },                                          workspace = "3 silent" })
 hl.window_rule({ match = { class = "spotify" },                                                workspace = "8 silent" })
